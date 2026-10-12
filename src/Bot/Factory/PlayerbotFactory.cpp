@@ -1826,6 +1826,25 @@ uint32 PlayerbotFactory::InitTalentsTree(bool increment /*false*/, bool use_temp
     return sPlayerbotAIConfig.randomClassSpecIndex[cls][specTab];
 }
 
+// LimitTalentsExpansion: up to level 60 rows 0-5 and the middle talent of row 6, up to 70 rows 0-7 and the
+// middle talent of row 8, as in InitTalentsByTemplate().
+static bool IsAboveTalentExpansionLimit(Player* bot, uint32 row, uint32 col)
+{
+    if (!sPlayerbotAIConfig.limitTalentsExpansion)
+        return false;
+
+    uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+    uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+
+    if (effLevel <= 60)
+        return row > 6 || (row == 6 && col != 1);
+
+    if (effLevel <= 70)
+        return row > 8 || (row == 8 && col != 1);
+
+    return false;
+}
+
 void PlayerbotFactory::InitTalentsBySpecNo(Player* bot, int specNo, bool reset)
 {
     if (reset)
@@ -1875,15 +1894,8 @@ void PlayerbotFactory::InitTalentsBySpecNo(Player* bot, int specNo, bool reset)
         for (std::vector<uint32>& p : sPlayerbotAIConfig.parsedSpecLinkOrder[cls][specNo][level])
         {
             uint32 tab = p[0], row = p[1], col = p[2], lvl = p[3];
-            if (sPlayerbotAIConfig.limitTalentsExpansion)
-            {
-                uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
-                uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
-                if (effLevel <= 60 && (row > 6 || (row == 6 && col != 1)))
-                    continue;
-                if (effLevel <= 70 && (row > 8 || (row == 8 && col != 1)))
-                    continue;
-            }
+            if (IsAboveTalentExpansionLimit(bot, row, col))
+                continue;
             uint32 talentID = -1;
 
             std::vector<TalentEntry const*>& spells = spells_row[row];
@@ -1968,6 +1980,9 @@ void PlayerbotFactory::InitTalentsByParsedSpecLink(Player* bot, std::vector<std:
     for (std::vector<uint32>& p : parsedSpecLink)
     {
         uint32 tab = p[0], row = p[1], col = p[2], lvl = p[3];
+        if (IsAboveTalentExpansionLimit(bot, row, col))
+            continue;
+
         uint32 talentID = -1;
 
         std::vector<TalentEntry const*>& spells = spells_row[row];
