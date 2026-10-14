@@ -17,8 +17,20 @@
     <img src="https://github.com/mod-playerbots/mod-playerbots/actions/workflows/windows_build.yml/badge.svg">
 </div>
 
-# Playerbots Module
-`mod-playerbots` is an [AzerothCore](https://www.azerothcore.org/) module that adds player-like bots to a server. The project is based off [IKE3's Playerbots](https://github.com/ike3/mangosbot).
+# Playerbots Module — Project Jaina Tactical Edition
+
+`mod-playerbots` is an advanced player simulation module for [JainaCore](https://github.com/DarckRovert/JainaCore) / [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a).
+
+### ⚔️ Project Jaina Sovereign Innovations:
+- **Multithread Concurrency Hardening:** Mutex locks (`queueLock`, `eventCacheLock`, `ItemCacheLock`) eliminating race conditions and heap corruption under high load.
+- **Tactical Formations & Positioning:** `GetBehindTankNearHealerLocation` and `BotIsInFrontOfLivingTank`. DPS bots strictly position behind tanks avoiding frontal cleaves and dragon breaths.
+- **Body-Pull & Leash Protection:** `IsBodyPullRisk` and `IsChaseLeashed` preventing accidental proximity aggro in tight dungeon corridors.
+- **Smart Target Selection:** `StickyLifeTime` and `StickyDistance` algorithms eliminating hysterical target fluttering. Priority target selection for fleeing enemies and spellcasters.
+- **Line-of-Sight Healing Triage:** Dynamic path probing with `OUT_OF_SIGHT_PENALTY` and self-preservation while preserving the signature `-25.0f` tank priority.
+- **Tank Auto-Pull Strategy:** Autonomous pull routines (`AutoPullAction`, `AutoPullStrategy`) with backward-compatible aliases.
+- **Shortcuts & Role Recruitment:** Direct `.bot` / `.playerbot` commands supporting `role recruit` (Tank, Healer, DPS) and `raid` (5-man, 10-man, 25-man).
+
+---
 
 Features include:
 
