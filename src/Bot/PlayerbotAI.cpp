@@ -92,10 +92,16 @@ void PacketHandlingHelper::AddHandler(uint16 opcode, std::string const handler) 
 
 void PacketHandlingHelper::Handle(ExternalEventHelper& helper)
 {
-    while (!queue.empty())
+    for (;;)
     {
-        WorldPacket packet = queue.top();
-        queue.pop(); // remove first so handling can't modify the queue while we're using it
+        WorldPacket packet;
+        {
+            std::lock_guard<std::mutex> lock(queueLock);
+            if (queue.empty())
+                return;
+            packet = std::move(queue.top());
+            queue.pop(); // remove first so handling can't modify the queue while we're using it
+        }
 
         helper.HandlePacket(handlers, packet);
     }
@@ -109,7 +115,10 @@ void PacketHandlingHelper::AddPacket(WorldPacket const& packet)
     // assert(packet);
     // assert(packet.GetOpcode());
     if (handlers.find(packet.GetOpcode()) != handlers.end())
+    {
+        std::lock_guard<std::mutex> lock(queueLock);
         queue.push(WorldPacket(packet));
+    }
 }
 
 PlayerbotAI::PlayerbotAI()
@@ -1546,6 +1555,12 @@ void PlayerbotAI::DoNextAction(bool min)
         if (currentTarget != nullptr)
         {
             aiObjectContext->GetValue<Unit*>("current target")->Set(nullptr);
+        }
+
+        if (sPlayerbotAIConfig.jainaKeepCombatEngine && !aiObjectContext->GetValue<GuidVector>("attackers")->Get().empty())
+        {
+            ChangeEngine(BOT_STATE_COMBAT);
+            return;
         }
     }
 

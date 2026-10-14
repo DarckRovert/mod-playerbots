@@ -100,6 +100,8 @@ public:
         creators["mark rti"] = &StrategyContext::mark_rti;
         creators["adds"] = &StrategyContext::possible_adds;
         creators["pull back"] = &StrategyContext::pull_back;
+        creators["auto pull"] = &StrategyContext::auto_pull;
+        creators["coa auto pull"] = &StrategyContext::coa_auto_pull;
         creators["close"] = &StrategyContext::close;
         creators["ranged"] = &StrategyContext::ranged;
         creators["behind"] = &StrategyContext::behind;
@@ -178,6 +180,8 @@ private:
     static Strategy* sit(PlayerbotAI* botAI) { return new SitStrategy(botAI); }
     static Strategy* possible_adds(PlayerbotAI* botAI) { return new PossibleAddsStrategy(botAI); }
     static Strategy* pull_back(PlayerbotAI* botAI) { return new PullBackStrategy(botAI); }
+    static Strategy* auto_pull(PlayerbotAI* botAI) { return new AutoPullStrategy(botAI); }
+    static Strategy* coa_auto_pull(PlayerbotAI* botAI) { return new AutoPullStrategy(botAI, "coa auto pull"); }
     static Strategy* mount(PlayerbotAI* botAI) { return new MountStrategy(botAI); }
     static Strategy* bg(PlayerbotAI* botAI) { return new BGStrategy(botAI); }
     static Strategy* battleground(PlayerbotAI* botAI) { return new BattlegroundStrategy(botAI); }

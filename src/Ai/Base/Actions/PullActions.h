@@ -48,6 +48,17 @@ private:
     Unit* GetPullTarget(Event event) override;
 };
 
+class AutoPullAction : public PullRequestAction
+{
+public:
+    AutoPullAction(PlayerbotAI* botAI, std::string const name = "auto pull") : PullRequestAction(botAI, name) {}
+
+    bool isUseful() override;
+
+private:
+    Unit* GetPullTarget(Event event) override;
+};
+
 class PullStartAction : public Action
 {
 public:

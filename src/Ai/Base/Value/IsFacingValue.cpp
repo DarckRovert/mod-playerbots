@@ -14,5 +14,8 @@ bool IsFacingValue::Calculate()
     if (!target)
         return false;
 
+    if (sPlayerbotAIConfig.jainaNextTargetSameTick)
+        return bot->HasInArc(170.0f * float(M_PI) / 180.0f, target);
+
     return bot->HasInArc(M_PI_2, target);
 }

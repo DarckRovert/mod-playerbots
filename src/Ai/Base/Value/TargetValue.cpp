@@ -7,6 +7,7 @@
 #include "TargetValue.h"
 #include "CombatManager.h"
 #include "LastMovementValue.h"
+#include "MotionMaster.h"
 #include "ObjectGuid.h"
 #include "Playerbots.h"
 #include "RtiTargetValue.h"
@@ -121,25 +122,62 @@ void FindTargetStrategy::GetPlayerCount(Unit* creature, uint32* tankCount, uint3
     dpsCountCache[creature] = *dpsCount;
 }
 
-bool FindTargetStrategy::IsHighPriority(Unit* attacker)
+bool IsFleeingForAssistance(Unit* unit)
 {
-    if (Group* group = botAI->GetBot()->GetGroup())
+    if (!unit || !unit->IsCreature())
+        return false;
+
+    switch (unit->GetMotionMaster()->GetCurrentMovementGeneratorType())
+    {
+        case ASSISTANCE_MOTION_TYPE:
+        case ASSISTANCE_DISTRACT_MOTION_TYPE:
+        case TIMED_FLEEING_MOTION_TYPE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+TargetPriority FindTargetStrategy::GetPriority(Unit* attacker)
+{
+    Player* bot = botAI->GetBot();
+    if (Group* group = bot->GetGroup())
     {
         ObjectGuid guid = group->GetTargetIcon(7);
         if (guid && attacker->GetGUID() == guid)
-        {
-            return true;
-        }
+            return TargetPriority::Marked;
     }
+
     GuidVector prioritizedTargets = botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Get();
     for (ObjectGuid targetGuid : prioritizedTargets)
-    {
         if (targetGuid && attacker->GetGUID() == targetGuid)
-        {
-            return true;
-        }
+            return TargetPriority::Marked;
+
+    if (sPlayerbotAIConfig.jainaFocusRunners && IsFleeingForAssistance(attacker) && bot->GetMap()->IsDungeon())
+    {
+        Creature* creature = attacker->ToCreature();
+        if (!creature->isWorldBoss() && !creature->IsDungeonBoss())
+            return TargetPriority::FleeingForAssistance;
     }
-    return false;
+
+    return TargetPriority::Normal;
+}
+
+bool FindTargetStrategy::IsHighPriority(Unit* attacker) { return GetPriority(attacker) == TargetPriority::Marked; }
+
+bool FindTargetStrategy::CheckPriority(Unit* attacker)
+{
+    if (highestPriority == TargetPriority::Marked)
+        return true;
+
+    TargetPriority const priority = GetPriority(attacker);
+    if (priority > highestPriority)
+    {
+        highestPriority = priority;
+        result = attacker;
+    }
+
+    return highestPriority != TargetPriority::Normal;
 }
 
 WorldPosition LastLongMoveValue::Calculate()

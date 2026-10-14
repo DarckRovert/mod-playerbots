@@ -92,12 +92,13 @@ public:
     bool isUseful() override;
 };
 
-class DropTargetAction : public Action
+class DropTargetAction : public AttackAction
 {
 public:
-    DropTargetAction(PlayerbotAI* botAI) : Action(botAI, "drop target") {}
+    DropTargetAction(PlayerbotAI* botAI) : AttackAction(botAI, "drop target") {}
 
     bool Execute(Event event) override;
+    bool isUseful() override;
 };
 
 class TargetRequesterAction : public Action

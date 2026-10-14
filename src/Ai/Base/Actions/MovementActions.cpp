@@ -170,6 +170,30 @@ bool MovementAction::MoveToLOS(WorldObject* target, bool ranged)
     return false;
 }
 
+bool MovementAction::IsBodyPullRisk(float x, float y, float z)
+{
+    if (!sPlayerbotAIConfig.jainaBodyPullGuard || bot->IsInCombat() || !bot->GetMap()->IsDungeon())
+        return false;
+
+    Player* master = botAI->GetMaster();
+    if (master && master->IsInCombat())
+        return false;
+
+    Unit* intendedTarget = AI_VALUE(Unit*, "current target");
+    for (ObjectGuid const& guid : AI_VALUE(GuidVector, "possible targets no los"))
+    {
+        Creature* creature = botAI->GetCreature(guid);
+        if (!creature || creature == intendedTarget || !creature->IsAlive() || creature->IsInCombat() ||
+            creature->HasReactState(REACT_PASSIVE) || !creature->IsHostileTo(bot))
+            continue;
+
+        if (creature->GetExactDist(x, y, z) < creature->GetAttackDistance(bot) + 3.0f)
+            return true;
+    }
+
+    return false;
+}
+
 bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool /*idle*/, bool /*react*/, bool normal_only,
                             bool exact_waypoint, MovementPriority priority, bool lessDelay, bool backwards)
 {
@@ -183,6 +207,10 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool /*idle
         return false;
     }
     if (IsWaitingForLastMove(priority))
+    {
+        return false;
+    }
+    if (priority <= MovementPriority::MOVEMENT_NORMAL && IsBodyPullRisk(x, y, z))
     {
         return false;
     }
@@ -2111,7 +2139,7 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
         }
         if (!unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
         {
-            return false;
+            continue;
         }
         Unit::AuraEffectList const& aurasPeriodicTriggerSpell =
             unit->GetAuraEffectsByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
@@ -2131,7 +2159,7 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
                     continue;
                 if (sPlayerbotAIConfig.aoeAvoidSpellWhitelist.find(triggerSpellInfo->Id) !=
                     sPlayerbotAIConfig.aoeAvoidSpellWhitelist.end())
-                    return false;
+                    continue;
                 for (int j = 0; j < MAX_SPELL_EFFECTS; j++)
                 {
                     if (triggerSpellInfo->Effects[j].Effect == SPELL_EFFECT_SCHOOL_DAMAGE)
@@ -2156,6 +2184,7 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
                                     << " Radius " << radius << " - [Unit Trigger]";
                                 bot->Say(out.str(), LANG_UNIVERSAL);
                             }
+                            return true;
                         }
                     }
                 }

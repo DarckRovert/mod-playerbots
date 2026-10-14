@@ -169,6 +169,32 @@ bool PlayerbotAIConfig::Initialize()
                               aoeAvoidSpellWhitelist);
     tellWhenAvoidAoe = sConfigMgr->GetOption<bool>("AiPlayerbot.TellWhenAvoidAoe", false);
 
+    // Project Jaina Tactical AI & Raid Management (Hito #143)
+    jainaKeepTargetOutOfSight = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaKeepTargetOutOfSight",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaKeepTargetOutOfSight", true));
+    jainaFocusRunners = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaFocusRunners",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaFocusRunners", true));
+    jainaStickyTarget = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaStickyTarget",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaStickyTarget", true));
+    jainaBodyPullGuard = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaBodyPullGuard",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaBodyPullGuard", true));
+    jainaRegainLineOfSight = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaRegainLineOfSight",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaRegainLineOfSight", true));
+    jainaChaseLeash = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaChaseLeash",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaChaseLeash", true));
+    jainaHoldBehindTank = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaHoldBehindTank",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaHoldBehindTank", true));
+    jainaNoFacingWhileMoving = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaNoFacingWhileMoving",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaNoFacingWhileMoving", true));
+    jainaKeepCombatEngine = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaKeepCombatEngine",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaKeepCombatEngine", true));
+    jainaNextTargetSameTick = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaNextTargetSameTick",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaNextTargetSameTick", true));
+    jainaHealSelfFirst = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaHealSelfFirst",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaHealSelfFirst", true));
+    jainaSmartTank = sConfigMgr->GetOption<bool>("AiPlayerbot.JainaSmartTank",
+        sConfigMgr->GetOption<bool>("AiPlayerbot.CoaSmartTank", true));
+
     randomGearLoweringChance = sConfigMgr->GetOption<float>("AiPlayerbot.RandomGearLoweringChance", 0.0f);
     randomGearQualityLimit = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomGearQualityLimit", 3);
     randomGearScoreLimit = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomGearScoreLimit", 0);

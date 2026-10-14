@@ -69,3 +69,78 @@ bool ReturnToPullPositionTrigger::IsActive()
     return pullPosition.isSet() && pullPosition.mapId == bot->GetMapId() &&
            bot->GetDistance(pullPosition.x, pullPosition.y, pullPosition.z) > sPlayerbotAIConfig.followDistance;
 }
+
+bool ReadyToPullTrigger::IsActive()
+{
+    if (!bot || !botAI || !bot->IsAlive())
+        return false;
+
+    if (!PlayerbotAI::IsTank(bot, true))
+        return false;
+
+    if (bot->IsInCombat() || !AI_VALUE(std::vector<Unit*>, "attackers").empty())
+        return false;
+
+    PullStrategy* strategy = PullStrategy::Get(botAI);
+    if (!strategy || strategy->HasTarget() || strategy->IsPullPendingToStart())
+        return false;
+
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (!member || !member->IsAlive())
+                return false;
+
+            if (member->GetHealthPct() < sPlayerbotAIConfig.almostFullHealth)
+                return false;
+
+            if (member->GetMaxPower(POWER_MANA) > 0 && member->GetPowerPct(POWER_MANA) < sPlayerbotAIConfig.mediumHealth)
+            {
+                if (PlayerbotAI::IsHeal(member) || member->getClass() == CLASS_MAGE ||
+                    member->getClass() == CLASS_PRIEST || member->getClass() == CLASS_WARLOCK)
+                    return false;
+            }
+
+            if (member->GetMapId() != bot->GetMapId() || bot->GetDistance(member) > sPlayerbotAIConfig.sightDistance)
+                return false;
+        }
+    }
+
+    // Must have a viable pull target
+    Unit* target = nullptr;
+    if (Group* group = bot->GetGroup())
+    {
+        for (int32 icon : {7, 6})
+        {
+            ObjectGuid const guid = group->GetTargetIcon(icon);
+            if (guid)
+            {
+                Unit* u = botAI->GetUnit(guid);
+                if (u && u->IsAlive() && !u->IsPlayer() && bot->IsWithinLOSInMap(u) &&
+                    bot->GetDistance(u) <= sPlayerbotAIConfig.sightDistance &&
+                    !u->HasBreakableByDamageCrowdControlAura())
+                {
+                    target = u;
+                    break;
+                }
+            }
+        }
+    }
+    if (!target)
+    {
+        target = AI_VALUE(Unit*, "grind target");
+        if (!target || !target->IsAlive() || target->IsPlayer() || !bot->IsWithinLOSInMap(target) ||
+            bot->GetDistance(target) > sPlayerbotAIConfig.sightDistance ||
+            target->HasBreakableByDamageCrowdControlAura())
+        {
+            target = AI_VALUE(Unit*, "dps target");
+        }
+    }
+
+    return target != nullptr && target->IsAlive() && !target->IsPlayer() &&
+           bot->IsWithinLOSInMap(target) &&
+           bot->GetDistance(target) <= sPlayerbotAIConfig.sightDistance &&
+           !target->HasBreakableByDamageCrowdControlAura();
+}

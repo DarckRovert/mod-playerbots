@@ -124,6 +124,87 @@ Unit* PullRtiTargetAction::GetPullTarget(Event /*event*/)
     return guid.IsEmpty() ? nullptr : botAI->GetUnit(guid);
 }
 
+Unit* AutoPullAction::GetPullTarget(Event /*event*/)
+{
+    if (Group* group = bot->GetGroup())
+    {
+        for (int32 icon : {7, 6})
+        {
+            ObjectGuid const guid = group->GetTargetIcon(icon);
+            if (guid)
+            {
+                Unit* target = botAI->GetUnit(guid);
+                if (target && target->IsAlive() && !target->IsPlayer() &&
+                    bot->IsWithinLOSInMap(target) &&
+                    bot->GetDistance(target) <= sPlayerbotAIConfig.sightDistance &&
+                    !target->HasBreakableByDamageCrowdControlAura())
+                {
+                    return target;
+                }
+            }
+        }
+    }
+
+    Unit* target = AI_VALUE(Unit*, "grind target");
+    if (target && target->IsAlive() && !target->IsPlayer() && bot->IsWithinLOSInMap(target) &&
+        bot->GetDistance(target) <= sPlayerbotAIConfig.sightDistance &&
+        !target->HasBreakableByDamageCrowdControlAura())
+    {
+        return target;
+    }
+
+    target = AI_VALUE(Unit*, "dps target");
+    if (target && target->IsAlive() && !target->IsPlayer() && bot->IsWithinLOSInMap(target) &&
+        bot->GetDistance(target) <= sPlayerbotAIConfig.sightDistance &&
+        !target->HasBreakableByDamageCrowdControlAura())
+    {
+        return target;
+    }
+
+    return nullptr;
+}
+
+bool AutoPullAction::isUseful()
+{
+    if (!bot || !botAI || !bot->IsAlive())
+        return false;
+
+    if (!PlayerbotAI::IsTank(bot, true))
+        return false;
+
+    if (bot->IsInCombat() || !AI_VALUE(std::vector<Unit*>, "attackers").empty())
+        return false;
+
+    PullStrategy* strategy = PullStrategy::Get(botAI);
+    if (!strategy || strategy->HasTarget() || strategy->IsPullPendingToStart())
+        return false;
+
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (!member || !member->IsAlive())
+                return false;
+
+            if (member->GetHealthPct() < sPlayerbotAIConfig.almostFullHealth)
+                return false;
+
+            if (member->GetMaxPower(POWER_MANA) > 0 && member->GetPowerPct(POWER_MANA) < sPlayerbotAIConfig.mediumHealth)
+            {
+                if (PlayerbotAI::IsHeal(member) || member->getClass() == CLASS_MAGE ||
+                    member->getClass() == CLASS_PRIEST || member->getClass() == CLASS_WARLOCK)
+                    return false;
+            }
+
+            if (member->GetMapId() != bot->GetMapId() || bot->GetDistance(member) > sPlayerbotAIConfig.sightDistance)
+                return false;
+        }
+    }
+
+    return GetPullTarget(Event()) != nullptr;
+}
+
 bool PullStartAction::Execute(Event event)
 {
     PullStrategy* strategy = PullStrategy::Get(botAI);

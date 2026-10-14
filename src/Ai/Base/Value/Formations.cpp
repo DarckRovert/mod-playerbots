@@ -6,6 +6,7 @@
 
 #include "Formations.h"
 #include "Arrow.h"
+#include "Group.h"
 #include "Event.h"
 #include "Map.h"
 #include "Playerbots.h"
@@ -47,8 +48,254 @@ bool ValidateTargetContext(Unit* a, Unit* b)
     return ValidateTargetContext(a, b, unused);
 }
 
+namespace
+{
+constexpr float TANK_NEAR_YARDS = 40.0f;
+constexpr float BEHIND_TANK_YARDS = 12.0f;
+
+bool SamePlace(WorldObject const* a, WorldObject const* b)
+{
+    return a && b && a->IsInWorld() && b->IsInWorld() && a->GetMapId() == b->GetMapId() &&
+           a->GetInstanceId() == b->GetInstanceId();
+}
+
+bool PartyOfFive(Player* bot, Group* group)
+{
+    return group && !bot->InBattleground() && group->GetMembersCount() <= 5;
+}
+
+Player* FindGroupTank(PlayerbotAI* botAI, Player* bot, Unit* target)
+{
+    Group* group = bot->GetGroup();
+    if (!PartyOfFive(bot, group))
+        return nullptr;
+
+    Player* master = botAI->GetMaster();
+    Player* first = nullptr;
+    Player* holding = nullptr;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || !member->IsAlive() || !SamePlace(member, bot) || !botAI->IsTank(member))
+            continue;
+
+        bool nearBot = bot->GetExactDist2d(member) <= TANK_NEAR_YARDS;
+        bool nearMaster = master && SamePlace(master, member) && master->GetExactDist2d(member) <= TANK_NEAR_YARDS;
+        if (!nearBot && !nearMaster)
+            continue;
+
+        if (!first)
+            first = member;
+        if (target && target->GetVictim() == member)
+            holding = member;
+    }
+
+    return holding ? holding : first;
+}
+
+// Away from the tank's own victim; false when no living victim defines that side.
+bool AwayFromPull(Player* tank, float& awayX, float& awayY)
+{
+    awayX = -std::cos(tank->GetOrientation());
+    awayY = -std::sin(tank->GetOrientation());
+
+    Unit* victim = tank->GetVictim();
+    if (!victim || !victim->IsAlive() || !SamePlace(victim, tank) || victim == tank)
+        return false;
+
+    float dx = tank->GetPositionX() - victim->GetPositionX();
+    float dy = tank->GetPositionY() - victim->GetPositionY();
+    float len = std::sqrt(dx * dx + dy * dy);
+    if (len <= 0.5f)
+        return false;
+
+    awayX = dx / len;
+    awayY = dy / len;
+    return true;
+}
+}  // namespace
+
+bool GetBehindTankNearHealerLocation(PlayerbotAI* botAI, Player* bot, WorldLocation& out, Unit* target)
+{
+    if (!sPlayerbotAIConfig.jainaHoldBehindTank)
+        return false;
+
+    if (!botAI || !bot || botAI->IsTank(bot))
+        return false;
+
+    Player* tank = FindGroupTank(botAI, bot, target);
+    if (!tank)
+        return false;
+
+    float awayX = 0.0f;
+    float awayY = 0.0f;
+    AwayFromPull(tank, awayX, awayY);
+
+    float ax = tank->GetPositionX() + awayX * BEHIND_TANK_YARDS;
+    float ay = tank->GetPositionY() + awayY * BEHIND_TANK_YARDS;
+    float az = tank->GetPositionZ();
+
+    Player* healer = nullptr;
+    std::vector<Player*> others;
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || !member->IsAlive() || !SamePlace(member, bot) || botAI->IsTank(member))
+                continue;
+            others.push_back(member);
+            if (!healer && botAI->IsHeal(member))
+                healer = member;
+        }
+    }
+
+    // Dot with the away-from-the-mob vector. Distance alone is true for a healer past the mob.
+    bool healerBehind = false;
+    if (healer && healer != bot && tank->GetExactDist2d(healer) < 15.0f)
+    {
+        float hx = healer->GetPositionX() - tank->GetPositionX();
+        float hy = healer->GetPositionY() - tank->GetPositionY();
+        healerBehind = hx * awayX + hy * awayY >= 2.0f;
+    }
+
+    if (healerBehind)
+    {
+        ax = healer->GetPositionX();
+        ay = healer->GetPositionY();
+        az = healer->GetPositionZ();
+    }
+
+    if (bot != healer)
+    {
+        uint32 index = 0;
+        uint32 count = 0;
+        for (Player* member : others)
+        {
+            if (member == healer)
+                continue;
+            if (member == bot)
+                index = count;
+            ++count;
+        }
+
+        if (count > 1)
+        {
+            float side = (static_cast<float>(index) - (count - 1) / 2.0f) * 2.2f;
+            ax += -awayY * side;
+            ay += awayX * side;
+        }
+    }
+
+    bot->UpdateAllowedPositionZ(ax, ay, az);
+    out = WorldLocation(bot->GetMapId(), ax, ay, az);
+    return true;
+}
+
+bool GetTankSideMeleeLocation(PlayerbotAI* botAI, Player* bot, Unit* target, float range, WorldLocation& out)
+{
+    if (!sPlayerbotAIConfig.jainaHoldBehindTank)
+        return false;
+
+    if (!botAI || !bot || !target || botAI->IsTank(bot) || PlayerbotAI::IsRanged(bot) || botAI->IsHeal(bot))
+        return false;
+
+    Player* tank = FindGroupTank(botAI, bot, target);
+    if (!tank)
+        return false;
+
+    float originX = target->GetPositionX();
+    float originY = target->GetPositionY();
+    float originZ = target->GetPositionZ();
+    if (target->HasUnitMovementFlag(MOVEMENTFLAG_FORWARD))
+    {
+        float predict = std::min(3.0f, target->GetObjectSize() * 2.0f);
+        originX += std::cos(target->GetOrientation()) * predict;
+        originY += std::sin(target->GetOrientation()) * predict;
+    }
+
+    float dx = tank->GetPositionX() - originX;
+    float dy = tank->GetPositionY() - originY;
+    float len = std::sqrt(dx * dx + dy * dy);
+    if (len < 0.5f)
+    {
+        dx = std::cos(tank->GetOrientation());
+        dy = std::sin(tank->GetOrientation());
+        len = 1.0f;
+    }
+
+    float reach = std::max(range, target->GetCombatReach() + bot->GetCombatReach());
+    float ax = originX;
+    float ay = originY;
+
+    uint32 index = 0;
+    uint32 count = 0;
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == tank || !member->IsAlive() || !SamePlace(member, bot) || botAI->IsTank(member) ||
+                botAI->IsHeal(member) || PlayerbotAI::IsRanged(member))
+                continue;
+            if (member == bot)
+                index = count;
+            ++count;
+        }
+    }
+    float ux = dx / len;
+    float uy = dy / len;
+    float ox = ux * reach;
+    float oy = uy * reach;
+    if (count > 1)
+    {
+        float side = (static_cast<float>(index) - (count - 1) / 2.0f) * 2.0f;
+        ox += -uy * side;
+        oy += ux * side;
+        float olen = std::sqrt(ox * ox + oy * oy);
+        if (olen > 0.1f)
+        {
+            ox = ox / olen * reach;
+            oy = oy / olen * reach;
+        }
+    }
+    ax = originX + ox;
+    ay = originY + oy;
+
+    float az = originZ;
+    bot->UpdateAllowedPositionZ(ax, ay, az);
+    out = WorldLocation(bot->GetMapId(), ax, ay, az);
+    return true;
+}
+
+bool BotIsInFrontOfLivingTank(PlayerbotAI* botAI, Player* bot, Unit* target)
+{
+    if (!sPlayerbotAIConfig.jainaHoldBehindTank)
+        return false;
+
+    if (!botAI || !bot || !target || botAI->IsTank(bot))
+        return false;
+
+    Player* tank = FindGroupTank(botAI, bot, target);
+    if (!tank)
+        return false;
+
+    float awayX = 0.0f;
+    float awayY = 0.0f;
+    if (!AwayFromPull(tank, awayX, awayY))
+        return false;
+
+    float bx = bot->GetPositionX() - tank->GetPositionX();
+    float by = bot->GetPositionY() - tank->GetPositionY();
+    return bx * awayX + by * awayY < -1.0f;
+}
+
 WorldLocation MoveAheadFormation::GetLocation()
 {
+    WorldLocation behindTank;
+    if (GetBehindTankNearHealerLocation(botAI, bot, behindTank, AI_VALUE(Unit*, "current target")))
+        return behindTank;
+
     Player* master = GetMaster();
     if (!ValidateTargetContext(master, bot))
         return Formation::NullLocation;

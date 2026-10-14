@@ -7,6 +7,7 @@
 #include "SnareTargetValue.h"
 #include "AiObjectContext.h"
 #include "PlayerbotAI.h"
+#include "PlayerbotAIConfig.h"
 #include "ServerFacade.h"
 
 Unit* SnareTargetValue::Calculate()
@@ -28,6 +29,12 @@ Unit* SnareTargetValue::Calculate()
         {
             case FLEEING_MOTION_TYPE:
                 return unit;
+            case ASSISTANCE_MOTION_TYPE:
+            case ASSISTANCE_DISTRACT_MOTION_TYPE:
+            case TIMED_FLEEING_MOTION_TYPE:
+                if (sPlayerbotAIConfig.jainaFocusRunners)
+                    return unit;
+                break;
             case CHASE_MOTION_TYPE:
             {
                 chaseTarget = ServerFacade::instance().GetChaseTarget(unit);

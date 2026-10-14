@@ -109,6 +109,8 @@ public:
         creators["arcane torrent"] = &ActionContext::arcane_torrent;
         creators["pull my target"] = &ActionContext::pull_my_target;
         creators["pull rti target"] = &ActionContext::pull_rti_target;
+        creators["auto pull"] = &ActionContext::auto_pull;
+        creators["coa auto pull"] = &ActionContext::auto_pull;
         creators["pull start"] = &ActionContext::pull_start;
         creators["pull action"] = &ActionContext::pull_action;
         creators["pull end"] = &ActionContext::pull_end;
@@ -326,6 +328,7 @@ private:
     static Action* arcane_torrent(PlayerbotAI* botAI) { return new CastArcaneTorrentAction(botAI); }
     static Action* pull_my_target(PlayerbotAI* botAI) { return new PullMyTargetAction(botAI); }
     static Action* pull_rti_target(PlayerbotAI* botAI) { return new PullRtiTargetAction(botAI); }
+    static Action* auto_pull(PlayerbotAI* botAI) { return new AutoPullAction(botAI); }
     static Action* pull_start(PlayerbotAI* botAI) { return new PullStartAction(botAI); }
     static Action* pull_action(PlayerbotAI* botAI) { return new PullAction(botAI); }
     static Action* pull_end(PlayerbotAI* botAI) { return new PullEndAction(botAI); }

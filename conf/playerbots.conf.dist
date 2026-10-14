@@ -2734,3 +2734,59 @@ AiPlayerbot.TargetPosRecalcDistance = 0.1
 
 # Allow bots to be summoned near innkeepers
 AiPlayerbot.SummonAtInnkeepersEnabled = 1
+
+###################################################################################################
+# PROJECT JAINA TACTICAL AI SUITE (Hito #143)
+#
+# High-concurrency multithreading safety locks, tactical formation positioning, sticky target
+# focus, smart healer triage, and tank pull management for Project Jaina bots.
+###################################################################################################
+
+# Enable mutex lock on packet queue handling to prevent heap corruption across world threads
+# Default: 1
+AiPlayerbot.JainaQueueMutex = 1
+
+# Enable thread safety mutex on random bot event cache
+# Default: 1
+AiPlayerbot.JainaEventCacheMutex = 1
+
+# Enable thread safety mutex on random bot item query cache
+# Default: 1
+AiPlayerbot.JainaItemCacheMutex = 1
+
+# Preserves combat state and cleans dead target immediately without dropping combat loop
+# Default: 1
+AiPlayerbot.JainaCombatDropTarget = 1
+
+# Enables seamless next-target acquisition on the same tick upon enemy death
+# Default: 1
+AiPlayerbot.JainaNextTargetSameTick = 1
+
+# Enables high-priority target focus (fleeing runners, spellcasters, totems)
+# Default: 1
+AiPlayerbot.JainaTargetPriority = 1
+
+# Automatically snares fleeing enemies trying to pull nearby assistance
+# Default: 1
+AiPlayerbot.JainaSnareFleeing = 1
+
+# Prevents DPS target jitter/flicker by applying hysteresis weighting to current target
+# Default: 1
+AiPlayerbot.JainaStickyTarget = 1
+
+# Holds non-tank party members safely behind the active tank near healers to avoid frontals/cleaves
+# Default: 1
+AiPlayerbot.JainaHoldBehindTank = 1
+
+# Leashes melee and ranged chasers so they do not run out of healer line of sight
+# Default: 1
+AiPlayerbot.JainaChaseLeashed = 1
+
+# Prevents bots from pathing through enemy aggro radii and pulling extra packs
+# Default: 1
+AiPlayerbot.JainaBodyPullAvoidance = 1
+
+# Smart healer self-preservation triage when under 50% health while preserving tank priority
+# Default: 1
+AiPlayerbot.JainaHealSelfFirst = 1
+

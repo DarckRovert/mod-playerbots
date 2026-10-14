@@ -60,8 +60,10 @@ Unit* PartyMemberToHeal::Calculate()
                 else
                     probeValue = health + player->GetDistance2d(bot) / 10.0f;
 
-                if (probeValue < calc.minValue && Check(player))
-                    calc.probe(probeValue, player);
+                if (PlayerbotAI::IsTank(player, true))
+                    probeValue -= 25.0f;
+
+                Probe(calc, player, probeValue);
             }
         }
 
@@ -94,11 +96,7 @@ Unit* PartyMemberToHeal::Calculate()
                     probeValue -= 25.0f;
                 }
 
-                // delay Check player to here for better performance
-                if (probeValue < calc.minValue && Check(player))
-                {
-                    calc.probe(probeValue, player);
-                }
+                Probe(calc, player, probeValue);
             }
         }
 
@@ -109,11 +107,8 @@ Unit* PartyMemberToHeal::Calculate()
             float probeValue = 100.0f;
             if (isRaid || health < sPlayerbotAIConfig.mediumHealth)
                 probeValue = health + 30.0f;
-            // delay Check pet to here for better performance
-            if (probeValue < calc.minValue && Check(pet))
-            {
-                calc.probe(probeValue, pet);
-            }
+
+            Probe(calc, pet, probeValue);
         }
 
         Unit* charm = player->GetCharm();
@@ -123,14 +118,34 @@ Unit* PartyMemberToHeal::Calculate()
             float probeValue = 100.0f;
             if (isRaid || health < sPlayerbotAIConfig.mediumHealth)
                 probeValue = health + 30.0f;
-            // delay Check charm to here for better performance
-            if (probeValue < calc.minValue && Check(charm))
-            {
-                calc.probe(probeValue, charm);
-            }
+
+            Probe(calc, charm, probeValue);
         }
     }
     return (Unit*)calc.param;
+}
+
+void PartyMemberToHeal::Probe(MinValueCalculator& calc, Unit* unit, float probeValue)
+{
+    float const OUT_OF_SIGHT_PENALTY = 30.0f;
+    if (!bot->IsWithinLOSInMap(unit))
+        probeValue += OUT_OF_SIGHT_PENALTY;
+
+    // Self-healing priority when jainaHealSelfFirst is active
+    if (sPlayerbotAIConfig.jainaHealSelfFirst && unit == bot)
+    {
+        float botHealth = bot->GetHealthPct();
+        if (botHealth < sPlayerbotAIConfig.mediumHealth)
+        {
+            // Give self-preservation priority bonus
+            probeValue -= 20.0f;
+        }
+    }
+
+    if (probeValue < calc.minValue && Check(unit))
+    {
+        calc.probe(probeValue, unit);
+    }
 }
 
 bool PartyMemberToHeal::Check(Unit* player)
@@ -138,8 +153,8 @@ bool PartyMemberToHeal::Check(Unit* player)
     // return player && player != bot && player->GetMapId() == bot->GetMapId() && player->IsInWorld() &&
     //     ServerFacade::instance().GetDistance2d(bot, player) < (player->IsPlayer() && botAI->IsTank((Player*)player) ? 50.0f
     //     : 40.0f);
-    return player->GetMapId() == bot->GetMapId() && !player->IsCharmed() &&
-           bot->GetDistance2d(player) < sPlayerbotAIConfig.healDistance * 2 && bot->IsWithinLOSInMap(player);
+    return player && player->GetMapId() == bot->GetMapId() && !player->IsCharmed() &&
+           bot->GetDistance2d(player) < sPlayerbotAIConfig.healDistance * 2;
 }
 
 Unit* HealerLowMana::Calculate()

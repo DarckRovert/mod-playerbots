@@ -39,13 +39,52 @@ public:
             {"rndbot", HandleRandomPlayerbotCommand, SEC_GAMEMASTER, Console::Yes},
             {"debug", playerbotsDebugCommandTable},
             {"account", playerbotsAccountCommandTable},
+            {"role", HandleRoleCommand, SEC_PLAYER, Console::No},
+            {"coa", HandleCoaCommand, SEC_PLAYER, Console::No},
+            {"raid", HandleRaidCommand, SEC_PLAYER, Console::No},
+            {"regear", HandleRegearCommand, SEC_PLAYER, Console::No},
         };
 
         static ChatCommandTable commandTable = {
             {"playerbots", playerbotsCommandTable},
+            {"bot", HandlePlayerbotCommand, SEC_PLAYER, Console::No},
+            {"playerbot", HandlePlayerbotCommand, SEC_PLAYER, Console::No},
+            {"rndbot", HandleRandomPlayerbotCommand, SEC_GAMEMASTER, Console::Yes},
         };
 
         return commandTable;
+    }
+
+    static bool HandleRoleCommand(ChatHandler* handler, char const* args)
+    {
+        std::string fullArgs = "role ";
+        if (args && *args)
+            fullArgs += args;
+        return PlayerbotMgr::HandlePlayerbotMgrCommand(handler, fullArgs.c_str());
+    }
+
+    static bool HandleCoaCommand(ChatHandler* handler, char const* args)
+    {
+        std::string fullArgs = "coa ";
+        if (args && *args)
+            fullArgs += args;
+        return PlayerbotMgr::HandlePlayerbotMgrCommand(handler, fullArgs.c_str());
+    }
+
+    static bool HandleRaidCommand(ChatHandler* handler, char const* args)
+    {
+        std::string fullArgs = "raid ";
+        if (args && *args)
+            fullArgs += args;
+        return PlayerbotMgr::HandlePlayerbotMgrCommand(handler, fullArgs.c_str());
+    }
+
+    static bool HandleRegearCommand(ChatHandler* handler, char const* args)
+    {
+        std::string fullArgs = "regear ";
+        if (args && *args)
+            fullArgs += args;
+        return PlayerbotMgr::HandlePlayerbotMgrCommand(handler, fullArgs.c_str());
     }
 
     static bool HandlePlayerbotCommand(ChatHandler* handler, char const* args)

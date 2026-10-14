@@ -127,6 +127,20 @@ public:
     float maxAoeAvoidRadius;
     std::set<uint32> aoeAvoidSpellWhitelist;
     bool tellWhenAvoidAoe;
+
+    // Project Jaina Tactical AI & Raid Management (Hito #143)
+    bool jainaKeepTargetOutOfSight;
+    bool jainaFocusRunners;
+    bool jainaStickyTarget;
+    bool jainaBodyPullGuard;
+    bool jainaRegainLineOfSight;
+    bool jainaChaseLeash;
+    bool jainaHoldBehindTank;
+    bool jainaNoFacingWhileMoving;
+    bool jainaKeepCombatEngine;
+    bool jainaNextTargetSameTick;
+    bool jainaHealSelfFirst;
+    bool jainaSmartTank;
     std::set<uint32> disallowedGameObjects;
     std::set<uint32> attunementQuests;
     std::set<uint32> unobtainableItems;

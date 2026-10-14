@@ -42,4 +42,12 @@ public:
     bool IsActive() override;
 };
 
+class ReadyToPullTrigger : public Trigger
+{
+public:
+    ReadyToPullTrigger(PlayerbotAI* botAI, std::string const name = "ready to pull") : Trigger(botAI, name) {}
+
+    bool IsActive() override;
+};
+
 #endif

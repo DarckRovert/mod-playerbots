@@ -95,4 +95,17 @@ public:
     std::string const getName() override { return "pull back"; }
 };
 
+class AutoPullStrategy : public Strategy
+{
+public:
+    AutoPullStrategy(PlayerbotAI* botAI, std::string const name = "auto pull") : Strategy(botAI), strategyName(name) {}
+
+    void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    std::string const getName() override { return strategyName; }
+    uint32 GetType() const override { return STRATEGY_TYPE_NONCOMBAT; }
+
+private:
+    std::string strategyName;
+};
+
 #endif

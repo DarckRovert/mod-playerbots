@@ -101,6 +101,14 @@ public:
     std::string const GetTargetName() override { return "party member to heal"; }
 };
 
+class TargetOutOfSightTrigger : public Trigger
+{
+public:
+    TargetOutOfSightTrigger(PlayerbotAI* botAI) : Trigger(botAI, "target out of sight", 2) {}
+
+    bool IsActive() override;
+};
+
 class FarFromMasterTrigger : public Trigger
 {
 public:

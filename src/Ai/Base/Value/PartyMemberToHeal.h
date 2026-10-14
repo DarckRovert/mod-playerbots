@@ -9,6 +9,7 @@
 
 #include "PartyMemberValue.h"
 
+class MinValueCalculator;
 class Pet;
 class PlayerbotAI;
 class Unit;
@@ -24,6 +25,7 @@ public:
 protected:
     Unit* Calculate() override;
     bool Check(Unit* player) override;
+    void Probe(MinValueCalculator& calc, Unit* unit, float probeValue);
 };
 
 class PartyMemberToProtect : public PartyMemberValue

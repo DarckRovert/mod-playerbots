@@ -23,7 +23,8 @@ bool InvalidTargetValue::Calculate()
                !target->IsVisible() || !target->IsAlive() || target->IsPolymorphed() ||
                (target->IsCharmed() && target->IsPlayer() && target->ToPlayer()->GetTeamId(true) == bot->GetTeamId(true)) ||
                target->HasFearAura() || target->HasUnitState(UNIT_STATE_ISOLATED) || target->IsFriendlyTo(bot) ||
-               !AttackersValue::IsValidTarget(target, bot);
+               !(sPlayerbotAIConfig.jainaKeepTargetOutOfSight ? AttackersValue::IsPossibleTarget(target, bot)
+                                                             : AttackersValue::IsValidTarget(target, bot));
     }
 
     return !target;

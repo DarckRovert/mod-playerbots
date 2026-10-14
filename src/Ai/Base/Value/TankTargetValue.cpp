@@ -65,6 +65,11 @@ public:
         if (!attacker->IsAlive())
             return;
 
+        // Passive summons that hit nobody never give aggro: the tank walked to them (Amanitar mushrooms).
+        if (Creature* creature = attacker->ToCreature())
+            if (creature->HasReactState(REACT_PASSIVE) && !creature->GetVictim())
+                return;
+
         if (!result || IsBetter(attacker, result))
             result = attacker;
     }

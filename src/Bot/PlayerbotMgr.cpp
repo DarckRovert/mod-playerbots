@@ -1287,6 +1287,330 @@ std::vector<std::string> PlayerbotHolder::HandlePlayerbotCommand(char const* arg
         return messages;
     }
 
+    // --- Project Jaina Tactical Bot Commands: role, coa, raid, regear ---
+    auto const parseClass = [](char const* name) -> uint8
+    {
+        if (!name) return 0;
+        std::string s = name;
+        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+        if (s == "warrior") return CLASS_WARRIOR;
+        if (s == "paladin") return CLASS_PALADIN;
+        if (s == "hunter") return CLASS_HUNTER;
+        if (s == "rogue") return CLASS_ROGUE;
+        if (s == "priest") return CLASS_PRIEST;
+        if (s == "dk" || s == "deathknight") return CLASS_DEATH_KNIGHT;
+        if (s == "shaman") return CLASS_SHAMAN;
+        if (s == "mage") return CLASS_MAGE;
+        if (s == "warlock") return CLASS_WARLOCK;
+        if (s == "druid") return CLASS_DRUID;
+        return 0;
+    };
+
+    auto const recruitByRole = [&](std::string const& role, uint8 specificClass) -> ObjectGuid
+    {
+        uint8 teamId = master->GetTeamId(true);
+        std::vector<uint8> candidates;
+        if (specificClass != 0)
+        {
+            candidates.push_back(specificClass);
+        }
+        else if (role == "tank")
+        {
+            candidates = {CLASS_WARRIOR, CLASS_PALADIN, CLASS_DRUID};
+            if (master->GetLevel() >= sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL))
+                candidates.push_back(CLASS_DEATH_KNIGHT);
+        }
+        else if (role == "heal" || role == "healer")
+        {
+            candidates = {CLASS_PRIEST, CLASS_PALADIN, CLASS_SHAMAN, CLASS_DRUID};
+        }
+        else // dps
+        {
+            candidates = {CLASS_MAGE, CLASS_WARLOCK, CLASS_ROGUE, CLASS_HUNTER, CLASS_WARRIOR, CLASS_SHAMAN, CLASS_DRUID, CLASS_PRIEST};
+            if (master->GetLevel() >= sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL))
+                candidates.push_back(CLASS_DEATH_KNIGHT);
+        }
+
+        Acore::Containers::RandomShuffle(candidates);
+
+        for (uint8 c : candidates)
+        {
+            uint8 idx = RandomPlayerbotMgr::GetTeamClassIdx(teamId == TEAM_ALLIANCE, c);
+            auto itr = sRandomPlayerbotMgr.addclassCache.find(idx);
+            if (itr == sRandomPlayerbotMgr.addclassCache.end())
+                continue;
+
+            std::vector<ObjectGuid> pool(itr->second.begin(), itr->second.end());
+            Acore::Containers::RandomShuffle(pool);
+
+            for (ObjectGuid const& guid : pool)
+            {
+                if (botLoading.find(guid) != botLoading.end())
+                    continue;
+                if (ObjectAccessor::FindConnectedPlayer(guid))
+                    continue;
+                uint32 guildId = sCharacterCache->GetCharacterGuildIdByGuid(guid);
+                if (guildId && PlayerbotGuildMgr::instance().IsRealGuild(guildId))
+                    continue;
+                return guid;
+            }
+        }
+        return ObjectGuid::Empty;
+    };
+
+    if (!strcmp(cmd, "role") || !strcmp(cmd, "coa"))
+    {
+        char const* subCmd = charname;
+        char const* extraArg = genderArg;
+        if (subCmd && !strcmp(subCmd, "role"))
+        {
+            subCmd = genderArg;
+            extraArg = strtok(nullptr, " ");
+        }
+
+        if (!subCmd)
+        {
+            messages.push_back("Usage: .playerbots role/coa tank|heal|dps [class], or raid [size], or regear [level]");
+            return messages;
+        }
+
+        std::string action = subCmd;
+        std::transform(action.begin(), action.end(), action.begin(), ::tolower);
+
+        if (action == "regear")
+        {
+            uint32 targetLevel = master->GetLevel();
+            if (extraArg)
+            {
+                try { targetLevel = std::stoul(extraArg); } catch (...) {}
+            }
+            if (targetLevel == 0 || targetLevel > sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL))
+                targetLevel = master->GetLevel();
+
+            uint32 count = 0;
+            Player* targetPlayer = ObjectAccessor::FindConnectedPlayer(master->GetTarget());
+            if (targetPlayer && (GetPlayerBot(targetPlayer->GetGUID()) || sRandomPlayerbotMgr.GetPlayerBot(targetPlayer->GetGUID())))
+            {
+                PlayerbotFactory factory(targetPlayer, targetLevel, ITEM_QUALITY_EPIC);
+                factory.Randomize(false);
+                count++;
+                messages.push_back("Regeared " + targetPlayer->GetName() + " to level " + std::to_string(targetLevel) + " (Epic).");
+            }
+            else
+            {
+                for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
+                {
+                    if (Player* b = it->second)
+                    {
+                        PlayerbotFactory factory(b, targetLevel, ITEM_QUALITY_EPIC);
+                        factory.Randomize(false);
+                        count++;
+                    }
+                }
+                messages.push_back("Regeared " + std::to_string(count) + " bot(s) to level " + std::to_string(targetLevel) + " (Epic).");
+            }
+            return messages;
+        }
+
+        if (action == "raid")
+        {
+            uint32 raidSize = 5;
+            if (extraArg)
+            {
+                try { raidSize = std::stoul(extraArg); } catch (...) {}
+            }
+            if (raidSize < 2) raidSize = 5;
+            if (raidSize > 40) raidSize = 40;
+
+            uint32 numTanks = 1;
+            uint32 numHeals = 1;
+            if (raidSize <= 5)
+            {
+                numTanks = 1; numHeals = 1;
+            }
+            else if (raidSize <= 10)
+            {
+                numTanks = 2; numHeals = 2;
+            }
+            else if (raidSize <= 25)
+            {
+                numTanks = 3; numHeals = 5;
+            }
+            else
+            {
+                numTanks = 4; numHeals = 8;
+            }
+
+            char* tArg = strtok(nullptr, " ");
+            char* hArg = strtok(nullptr, " ");
+            if (tArg) { try { numTanks = std::stoul(tArg); } catch (...) {} }
+            if (hArg) { try { numHeals = std::stoul(hArg); } catch (...) {} }
+
+            uint32 numDps = 0;
+            if (raidSize > (numTanks + numHeals))
+                numDps = raidSize - numTanks - numHeals;
+
+            uint32 addedTanks = 0, addedHeals = 0, addedDps = 0;
+            for (uint32 i = 0; i < numTanks; ++i)
+            {
+                ObjectGuid guid = recruitByRole("tank", 0);
+                if (!guid.IsEmpty())
+                {
+                    AddPlayerBot(guid, master->GetSession()->GetAccountId());
+                    addedTanks++;
+                }
+            }
+            for (uint32 i = 0; i < numHeals; ++i)
+            {
+                ObjectGuid guid = recruitByRole("heal", 0);
+                if (!guid.IsEmpty())
+                {
+                    AddPlayerBot(guid, master->GetSession()->GetAccountId());
+                    addedHeals++;
+                }
+            }
+            for (uint32 i = 0; i < numDps; ++i)
+            {
+                ObjectGuid guid = recruitByRole("dps", 0);
+                if (!guid.IsEmpty())
+                {
+                    AddPlayerBot(guid, master->GetSession()->GetAccountId());
+                    addedDps++;
+                }
+            }
+
+            messages.push_back("Raid formed (" + std::to_string(raidSize) + " target): " +
+                std::to_string(addedTanks + addedHeals + addedDps) + " bots added (" +
+                std::to_string(addedTanks) + " Tanks, " + std::to_string(addedHeals) + " Healers, " +
+                std::to_string(addedDps) + " DPS).");
+            return messages;
+        }
+
+        // Single role recruit
+        uint8 specificCls = parseClass(extraArg);
+        ObjectGuid picked = recruitByRole(action, specificCls);
+        if (picked.IsEmpty())
+        {
+            messages.push_back("Recruit " + action + " failed: no available bot characters found!");
+            return messages;
+        }
+
+        AddPlayerBot(picked, master->GetSession()->GetAccountId());
+        std::string charName;
+        sCharacterCache->GetCharacterNameByGuid(picked, charName);
+        messages.push_back("Recruited " + action + " bot: " + charName);
+        return messages;
+    }
+
+    if (!strcmp(cmd, "raid"))
+    {
+        uint32 raidSize = 5;
+        if (charname)
+        {
+            try { raidSize = std::stoul(charname); } catch (...) {}
+        }
+        if (raidSize < 2) raidSize = 5;
+        if (raidSize > 40) raidSize = 40;
+
+        uint32 numTanks = 1;
+        uint32 numHeals = 1;
+        if (raidSize <= 5)
+        {
+            numTanks = 1; numHeals = 1;
+        }
+        else if (raidSize <= 10)
+        {
+            numTanks = 2; numHeals = 2;
+        }
+        else if (raidSize <= 25)
+        {
+            numTanks = 3; numHeals = 5;
+        }
+        else
+        {
+            numTanks = 4; numHeals = 8;
+        }
+
+        char* tArg = genderArg;
+        char* hArg = strtok(nullptr, " ");
+        if (tArg) { try { numTanks = std::stoul(tArg); } catch (...) {} }
+        if (hArg) { try { numHeals = std::stoul(hArg); } catch (...) {} }
+
+        uint32 numDps = 0;
+        if (raidSize > (numTanks + numHeals))
+            numDps = raidSize - numTanks - numHeals;
+
+        uint32 addedTanks = 0, addedHeals = 0, addedDps = 0;
+        for (uint32 i = 0; i < numTanks; ++i)
+        {
+            ObjectGuid guid = recruitByRole("tank", 0);
+            if (!guid.IsEmpty())
+            {
+                AddPlayerBot(guid, master->GetSession()->GetAccountId());
+                addedTanks++;
+            }
+        }
+        for (uint32 i = 0; i < numHeals; ++i)
+        {
+            ObjectGuid guid = recruitByRole("heal", 0);
+            if (!guid.IsEmpty())
+            {
+                AddPlayerBot(guid, master->GetSession()->GetAccountId());
+                addedHeals++;
+            }
+        }
+        for (uint32 i = 0; i < numDps; ++i)
+        {
+            ObjectGuid guid = recruitByRole("dps", 0);
+            if (!guid.IsEmpty())
+            {
+                AddPlayerBot(guid, master->GetSession()->GetAccountId());
+                addedDps++;
+            }
+        }
+
+        messages.push_back("Raid formed (" + std::to_string(raidSize) + " target): " +
+            std::to_string(addedTanks + addedHeals + addedDps) + " bots added (" +
+            std::to_string(addedTanks) + " Tanks, " + std::to_string(addedHeals) + " Healers, " +
+            std::to_string(addedDps) + " DPS).");
+        return messages;
+    }
+
+    if (!strcmp(cmd, "regear"))
+    {
+        uint32 targetLevel = master->GetLevel();
+        if (charname)
+        {
+            try { targetLevel = std::stoul(charname); } catch (...) {}
+        }
+        if (targetLevel == 0 || targetLevel > sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL))
+            targetLevel = master->GetLevel();
+
+        uint32 count = 0;
+        Player* targetPlayer = ObjectAccessor::FindConnectedPlayer(master->GetTarget());
+        if (targetPlayer && (GetPlayerBot(targetPlayer->GetGUID()) || sRandomPlayerbotMgr.GetPlayerBot(targetPlayer->GetGUID())))
+        {
+            PlayerbotFactory factory(targetPlayer, targetLevel, ITEM_QUALITY_EPIC);
+            factory.Randomize(false);
+            count++;
+            messages.push_back("Regeared " + targetPlayer->GetName() + " to level " + std::to_string(targetLevel) + " (Epic).");
+        }
+        else
+        {
+            for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
+            {
+                if (Player* b = it->second)
+                {
+                    PlayerbotFactory factory(b, targetLevel, ITEM_QUALITY_EPIC);
+                    factory.Randomize(false);
+                    count++;
+                }
+            }
+            messages.push_back("Regeared " + std::to_string(count) + " bot(s) to level " + std::to_string(targetLevel) + " (Epic).");
+        }
+        return messages;
+    }
+
     std::string charnameStr;
 
     if (!charname)

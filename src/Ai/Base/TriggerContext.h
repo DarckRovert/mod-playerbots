@@ -109,6 +109,7 @@ public:
 
         creators["enemy out of melee"] = &TriggerContext::EnemyOutOfMelee;
         creators["enemy out of spell"] = &TriggerContext::EnemyOutOfSpell;
+        creators["target out of sight"] = &TriggerContext::target_out_of_sight;
         creators["enemy too close for spell"] = &TriggerContext::enemy_too_close_for_spell;
         creators["enemy too close for shoot"] = &TriggerContext::enemy_too_close_for_shoot;
         creators["enemy too close for auto shot"] = &TriggerContext::enemy_too_close_for_auto_shot;
@@ -142,6 +143,7 @@ public:
         creators["pull start"] = &TriggerContext::pull_start;
         creators["pull end"] = &TriggerContext::pull_end;
         creators["return to pull position"] = &TriggerContext::return_to_pull_position;
+        creators["ready to pull"] = &TriggerContext::ready_to_pull;
 
         creators["no drink"] = &TriggerContext::no_drink;
         creators["no food"] = &TriggerContext::no_food;
@@ -296,6 +298,7 @@ private:
     static Trigger* pull_start(PlayerbotAI* botAI) { return new PullStartTrigger(botAI); }
     static Trigger* pull_end(PlayerbotAI* botAI) { return new PullEndTrigger(botAI); }
     static Trigger* return_to_pull_position(PlayerbotAI* botAI) { return new ReturnToPullPositionTrigger(botAI); }
+    static Trigger* ready_to_pull(PlayerbotAI* botAI) { return new ReadyToPullTrigger(botAI); }
     static Trigger* can_loot(PlayerbotAI* botAI) { return new CanLootTrigger(botAI); }
     static Trigger* far_from_loot_target(PlayerbotAI* botAI) { return new FarFromCurrentLootTrigger(botAI); }
     static Trigger* far_from_master(PlayerbotAI* botAI) { return new FarFromMasterTrigger(botAI); }
@@ -350,6 +353,7 @@ private:
     static Trigger* very_often(PlayerbotAI* botAI) { return new RandomTrigger(botAI, "often", 3); }
     static Trigger* EnemyOutOfMelee(PlayerbotAI* botAI) { return new EnemyOutOfMeleeTrigger(botAI); }
     static Trigger* EnemyOutOfSpell(PlayerbotAI* botAI) { return new EnemyOutOfSpellRangeTrigger(botAI); }
+    static Trigger* target_out_of_sight(PlayerbotAI* botAI) { return new TargetOutOfSightTrigger(botAI); }
     static Trigger* enemy_too_close_for_spell(PlayerbotAI* botAI) { return new EnemyTooCloseForSpellTrigger(botAI); }
     static Trigger* enemy_too_close_for_auto_shot(PlayerbotAI* botAI)
     {

@@ -205,6 +205,25 @@ PartyMemberToHealOutOfSpellRangeTrigger::PartyMemberToHealOutOfSpellRangeTrigger
 {
 }
 
+bool TargetOutOfSightTrigger::IsActive()
+{
+    if (!sPlayerbotAIConfig.jainaRegainLineOfSight)
+        return false;
+
+    if (botAI->IsHeal(bot))
+        return false;
+
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (!target || !target->IsAlive())
+        return false;
+
+    // Sight checks are unreliable against large models at point-blank range
+    if (!PlayerbotAI::IsRanged(bot) && bot->IsWithinMeleeRange(target))
+        return false;
+
+    return !bot->IsWithinLOSInMap(target);
+}
+
 bool FarFromMasterTrigger::IsActive()
 {
     return ServerFacade::instance().IsDistanceGreaterThan(AI_VALUE2(float, "distance", "group leader"), distance);

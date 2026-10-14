@@ -284,3 +284,13 @@ void PullBackStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         }
     ));
 }
+
+void AutoPullStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+{
+    triggers.push_back(new TriggerNode(
+        "ready to pull",
+        {
+            NextAction("auto pull", ACTION_DEFAULT)
+        }
+    ));
+}

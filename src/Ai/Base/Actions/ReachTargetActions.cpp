@@ -6,6 +6,8 @@
 
 #include "ReachTargetActions.h"
 #include "Event.h"
+#include "Group.h"
+#include "GroupReference.h"
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 #include "ServerFacade.h"
@@ -26,10 +28,51 @@ bool ReachTargetAction::isUseful()
         return false;
     }
     Unit* target = GetTarget();
-    // float dis = distance + CONTACT_DISTANCE;
-    return target &&
-           !bot->IsWithinCombatRange(target, distance);  // ServerFacade::instance().IsDistanceGreaterThan(AI_VALUE2(float,
-                                                         // "distance", GetTargetName()), distance);
+    if (!target || bot->IsWithinCombatRange(target, distance))
+        return false;
+
+    return !(ChasesEnemy() && IsChaseLeashed(target));
+}
+
+Unit* ReachTargetAction::ChaseAnchor() const
+{
+    if (!PlayerbotAI::IsTank(bot))
+        return AI_VALUE(Unit*, "main tank");
+
+    Unit* healer = nullptr;
+    Unit* nearest = nullptr;
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == bot || !member->IsAlive() || member->GetMapId() != bot->GetMapId())
+                continue;
+
+            if (PlayerbotAI::IsHeal(member) && (!healer || bot->GetExactDist(member) < bot->GetExactDist(healer)))
+                healer = member;
+            if (!nearest || bot->GetExactDist(member) < bot->GetExactDist(nearest))
+                nearest = member;
+        }
+    }
+
+    return healer ? healer : nearest;
+}
+
+bool ReachTargetAction::IsChaseLeashed(Unit* target) const
+{
+    if (!sPlayerbotAIConfig.jainaChaseLeash || !target || !bot->GetGroup() || !bot->IsInCombat() ||
+        !bot->GetMap()->IsDungeon())
+        return false;
+
+    if (PlayerbotAI::IsTank(bot) && !target->GetVictim())
+        return false;
+
+    Unit* anchor = ChaseAnchor();
+    if (!anchor || anchor == bot || !anchor->IsAlive() || anchor->GetMapId() != bot->GetMapId())
+        return false;
+
+    return anchor->GetExactDist(target) > botAI->GetRange("heal");
 }
 
 std::string const ReachTargetAction::GetTargetName() { return "current target"; }

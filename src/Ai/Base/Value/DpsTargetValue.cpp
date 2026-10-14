@@ -13,6 +13,25 @@
 #include "ServerFacade.h"
 #include "Strategy.h"
 
+namespace
+{
+    float StickyLifeTime(Unit* unit, Unit* currentTarget, float lifeTime)
+    {
+        return sPlayerbotAIConfig.jainaStickyTarget && unit == currentTarget ? lifeTime * 0.75f : lifeTime;
+    }
+
+    float StickyDistance(Unit* unit, Unit* currentTarget, float distance)
+    {
+        return sPlayerbotAIConfig.jainaStickyTarget && unit == currentTarget ? distance - 5.0f : distance;
+    }
+
+    float StickyDistance(Player* bot, Unit* unit, Unit* currentTarget)
+    {
+        float const distance = bot->GetDistance(unit);
+        return StickyDistance(unit, currentTarget, distance);
+    }
+}  // namespace
+
 class DpsFindTargetStrategy : public FindTargetStrategy
 {
 public:
@@ -36,15 +55,9 @@ public:
         if (!attacker->IsAlive())
             return;
 
-        if (foundHighPriority)
+        if (CheckPriority(attacker))
             return;
 
-        if (IsHighPriority(attacker))
-        {
-            result = attacker;
-            foundHighPriority = true;
-            return;
-        }
         if (!result || CalcThreatGap(attacker, threatMgr) > CalcThreatGap(result, &result->GetThreatMgr()))
             result = attacker;
     }
@@ -63,7 +76,8 @@ class CasterFindTargetSmartStrategy : public DpsFindTargetStrategy
 {
 public:
     CasterFindTargetSmartStrategy(PlayerbotAI* botAI, float dps)
-        : DpsFindTargetStrategy(botAI), dps_(dps), targetExpectedLifeTime(1000000)
+        : DpsFindTargetStrategy(botAI), dps_(dps), targetExpectedLifeTime(1000000),
+          currentTarget(botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get())
     {
         result = nullptr;
     }
@@ -79,15 +93,9 @@ public:
         if (!attacker->IsAlive() || IsCrowdControlled(attacker))
             return;
 
-        if (foundHighPriority)
+        if (CheckPriority(attacker))
             return;
 
-        if (IsHighPriority(attacker))
-        {
-            result = attacker;
-            foundHighPriority = true;
-            return;
-        }
         float expectedLifeTime = attacker->GetHealth() / dps_;
         // Unit* victim = attacker->GetVictim();
         if (!result || IsBetter(attacker, result))
@@ -108,9 +116,9 @@ public:
 
         int32_t level = new_level;
         if (level % 10 == 2 || level % 10 == 0)
-            return new_time < old_time;
+            return StickyLifeTime(new_unit, currentTarget, new_time) <
+                   StickyLifeTime(old_unit, currentTarget, old_time);
         // dont switch targets when all of them with low health
-        Unit* currentTarget = botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
         if (currentTarget == new_unit)
             return true;
 
@@ -126,6 +134,8 @@ public:
         float attackRange =
             botAI->IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.spellDistance : sPlayerbotAIConfig.meleeDistance;
         attackRange += 5.0f;
+        if (sPlayerbotAIConfig.jainaStickyTarget && unit == currentTarget)
+            attackRange += 5.0f;
         int level = dis < attackRange ? 10 : 0;
         if (time >= 5 && time <= 30)
             return level + 2;
@@ -139,6 +149,7 @@ public:
 protected:
     float dps_;
     float targetExpectedLifeTime;
+    Unit* currentTarget;
 };
 
 // General
@@ -146,8 +157,10 @@ class GeneralFindTargetSmartStrategy : public DpsFindTargetStrategy
 {
 public:
     GeneralFindTargetSmartStrategy(PlayerbotAI* botAI, float dps)
-        : DpsFindTargetStrategy(botAI), dps_(dps), targetExpectedLifeTime(1000000)
+        : DpsFindTargetStrategy(botAI), dps_(dps), targetExpectedLifeTime(1000000),
+          currentTarget(botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get())
     {
+        result = nullptr;
     }
 
     void CheckAttacker(Unit* attacker, ThreatManager*) override
@@ -161,15 +174,9 @@ public:
         if (!attacker->IsAlive() || IsCrowdControlled(attacker))
             return;
 
-        if (foundHighPriority)
+        if (CheckPriority(attacker))
             return;
 
-        if (IsHighPriority(attacker))
-        {
-            result = attacker;
-            foundHighPriority = true;
-            return;
-        }
         float expectedLifeTime = attacker->GetHealth() / dps_;
         // Unit* victim = attacker->GetVictim();
         if (!result || IsBetter(attacker, result))
@@ -191,10 +198,12 @@ public:
         // attack enemy in range and with lowest health
         int level = new_level;
         if (level == 10)
-            return new_time < old_time;
+            return StickyLifeTime(new_unit, currentTarget, new_time) <
+                   StickyLifeTime(old_unit, currentTarget, old_time);
 
         // all targets are far away, choose the closest one
-        return botAI->GetBot()->GetDistance(new_unit) < botAI->GetBot()->GetDistance(old_unit);
+        return StickyDistance(new_unit, currentTarget, botAI->GetBot()->GetDistance(new_unit)) <
+               StickyDistance(old_unit, currentTarget, botAI->GetBot()->GetDistance(old_unit));
     }
     int32_t GetIntervalLevel(Unit* unit)
     {
@@ -202,6 +211,8 @@ public:
         float attackRange =
             botAI->IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.spellDistance : sPlayerbotAIConfig.meleeDistance;
         attackRange += 5.0f;
+        if (sPlayerbotAIConfig.jainaStickyTarget && unit == currentTarget)
+            attackRange += 5.0f;
         int level = dis < attackRange ? 10 : 0;
         return level;
     }
@@ -209,6 +220,7 @@ public:
 protected:
     float dps_;
     float targetExpectedLifeTime;
+    Unit* currentTarget;
 };
 
 // combo
@@ -216,8 +228,10 @@ class ComboFindTargetSmartStrategy : public DpsFindTargetStrategy
 {
 public:
     ComboFindTargetSmartStrategy(PlayerbotAI* botAI, float dps)
-        : DpsFindTargetStrategy(botAI), dps_(dps), targetExpectedLifeTime(1000000)
+        : DpsFindTargetStrategy(botAI), dps_(dps), targetExpectedLifeTime(1000000),
+          currentTarget(botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get())
     {
+        result = nullptr;
     }
 
     void CheckAttacker(Unit* attacker, ThreatManager*) override
@@ -231,15 +245,9 @@ public:
         if (!attacker->IsAlive() || IsCrowdControlled(attacker))
             return;
 
-        if (foundHighPriority)
+        if (CheckPriority(attacker))
             return;
 
-        if (IsHighPriority(attacker))
-        {
-            result = attacker;
-            foundHighPriority = true;
-            return;
-        }
         float expectedLifeTime = attacker->GetHealth() / dps_;
         // Unit* victim = attacker->GetVictim();
         if (!result || IsBetter(attacker, result))
@@ -267,10 +275,12 @@ public:
             if (new_unit == combo_unit)
                 return true;
 
-            return new_time < old_time;
+            return StickyLifeTime(new_unit, currentTarget, new_time) <
+                   StickyLifeTime(old_unit, currentTarget, old_time);
         }
         // all targets are far away, choose the closest one
-        return bot->GetDistance(new_unit) < bot->GetDistance(old_unit);
+        return StickyDistance(new_unit, currentTarget, bot->GetDistance(new_unit)) <
+               StickyDistance(old_unit, currentTarget, bot->GetDistance(old_unit));
     }
     int32_t GetIntervalLevel(Unit* unit)
     {
@@ -278,6 +288,8 @@ public:
         float attackRange =
             botAI->IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.spellDistance : sPlayerbotAIConfig.meleeDistance;
         attackRange += 5.0f;
+        if (sPlayerbotAIConfig.jainaStickyTarget && unit == currentTarget)
+            attackRange += 5.0f;
         int level = dis < attackRange ? 10 : 0;
         return level;
     }
@@ -285,6 +297,7 @@ public:
 protected:
     float dps_;
     float targetExpectedLifeTime;
+    Unit* currentTarget;
 };
 
 Unit* DpsTargetValue::Calculate()
