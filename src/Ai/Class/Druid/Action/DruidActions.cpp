@@ -230,6 +230,13 @@ std::vector<NextAction> CastInnervateOnHealerAction::getPrerequisites()
 Unit* CastRejuvenationOnNotFullAction::GetTarget()
 {
     Group* group = bot->GetGroup();
+    if (!group)
+    {
+        if (!bot->isDead() && !bot->IsFullHealth() && !botAI->HasAura("rejuvenation", bot))
+            return bot;
+        return nullptr;
+    }
+
     MinValueCalculator calc(100);
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
@@ -255,7 +262,7 @@ Unit* CastRejuvenationOnNotFullAction::GetTarget()
 
 bool CastRejuvenationOnNotFullAction::isUseful()
 {
-    return GetTarget();
+    return GetTarget() != nullptr;
 }
 
 // --- Blanket HoT actions ---

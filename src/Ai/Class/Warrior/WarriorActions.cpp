@@ -48,10 +48,7 @@ bool CastBerserkerRageAction::isUseful()
 bool CastSunderArmorAction::isUseful()
 {
     Group* group = bot->GetGroup();
-    if (!group)
-        return false;
-
-    if (!botAI->IsTank(bot, false))
+    if (group && !botAI->IsTank(bot, false))
     {
         for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
         {
@@ -68,7 +65,11 @@ bool CastSunderArmorAction::isUseful()
         }
     }
 
-    Aura* aura = botAI->GetAura("sunder armor", GetTarget(), false, true);
+    Unit* target = GetTarget();
+    if (!target)
+        return false;
+
+    Aura* aura = botAI->GetAura("sunder armor", target, false, true);
     return !aura || aura->GetStackAmount() < 5 || aura->GetDuration() <= 6000;
 }
 

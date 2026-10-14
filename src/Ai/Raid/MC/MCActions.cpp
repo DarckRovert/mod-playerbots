@@ -332,12 +332,22 @@ Unit* McCoreHoundMarkAction::GetTarget()
     return nullptr;
 }
 
+bool McCoreHoundMarkAction::isUseful()
+{
+    return bot->GetGroup() != nullptr;
+}
+
 bool McCoreHoundMarkAction::Execute(Event /*event*/)
 {
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
     Unit* target = GetTarget();
     if (!target)
         return false;
 
-    bot->GetGroup()->SetTargetIcon(RtiTargetValue::skullIndex, bot->GetGUID(), target->GetGUID());
+    group->SetTargetIcon(RtiTargetValue::skullIndex, bot->GetGUID(), target->GetGUID());
     return true;
 }
+

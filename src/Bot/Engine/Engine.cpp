@@ -159,7 +159,9 @@ bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
     PushDefaultActions();
 
     uint32 iterations = 0;
-    uint32 iterationsPerTick = queue.Size() * (minimal ? 2 : sPlayerbotAIConfig.iterationsPerTick);
+    uint32 rawIterations = queue.Size() * (minimal ? 2 : sPlayerbotAIConfig.iterationsPerTick);
+    uint32 maxCap = minimal ? 10 : sPlayerbotAIConfig.maxIterationsPerTick;
+    uint32 iterationsPerTick = std::min(rawIterations, maxCap);
 
     while (++iterations <= iterationsPerTick)
     {
@@ -171,7 +173,7 @@ bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
         bool skipPrerequisites = basket->isSkipPrerequisites();
 
         if (minimal && (relevance < 100))
-            continue;
+            break;
 
         Event event = basket->getEvent();
         ActionNode* actionNode = queue.Pop();  // NOTE: Pop() deletes basket

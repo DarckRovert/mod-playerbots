@@ -511,6 +511,7 @@ public:
 
     virtual bool IsInterruptableSpellCasting(Unit* player, std::string const spell);
     virtual bool HasAuraToDispel(Unit* player, uint32 dispelType);
+    uint32 GetHumanReactionDelay() const;
     bool CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell = true, Item* itemTarget = nullptr,
                       Item* castItem = nullptr);
     bool CanCastSpell(uint32 spellid, GameObject* goTarget, bool checkHasSpell = true);

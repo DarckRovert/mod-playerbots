@@ -90,17 +90,41 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
     if (botLoading.find(playerGuid) != botLoading.end())
         return;
 
+    WorldSession* masterSession = masterAccountId ? sWorldSessionMgr->FindSession(masterAccountId) : nullptr;
+    Player* masterPlayer = masterSession ? masterSession->GetPlayer() : nullptr;
+
     // has bot already been added?
     Player* bot = ObjectAccessor::FindConnectedPlayer(playerGuid);
     if (bot && bot->IsInWorld())
+    {
+        if (masterPlayer)
+        {
+            if (PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot))
+            {
+                botAI->SetMaster(masterPlayer);
+            }
+            bot->TeleportTo(masterPlayer->GetMapId(), masterPlayer->GetPositionX(), masterPlayer->GetPositionY(), masterPlayer->GetPositionZ(), masterPlayer->GetOrientation());
+            Group* mgroup = masterPlayer->GetGroup();
+            if (mgroup)
+            {
+                if (!mgroup->IsMember(playerGuid))
+                {
+                    auto addOp = std::make_unique<GroupInviteOperation>(masterPlayer->GetGUID(), bot->GetGUID());
+                    PlayerbotWorldThreadProcessor::instance().QueueOperation(std::move(addOp));
+                }
+            }
+            else
+            {
+                auto inviteOp = std::make_unique<GroupInviteOperation>(masterPlayer->GetGUID(), bot->GetGUID());
+                PlayerbotWorldThreadProcessor::instance().QueueOperation(std::move(inviteOp));
+            }
+        }
         return;
+    }
 
     uint32 accountId = sCharacterCache->GetCharacterAccountIdByGuid(playerGuid);
     if (!accountId)
         return;
-
-    WorldSession* masterSession = masterAccountId ? sWorldSessionMgr->FindSession(masterAccountId) : nullptr;
-    Player* masterPlayer = masterSession ? masterSession->GetPlayer() : nullptr;
 
     bool isRndbot = !masterAccountId;
     bool sameAccount = sPlayerbotAIConfig.allowAccountBots && accountId == masterAccountId;
@@ -108,12 +132,13 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
     bool sameGuild = sPlayerbotAIConfig.allowGuildBots && guild && guild->GetMember(playerGuid);
     bool addClassBot = sRandomPlayerbotMgr.IsAddclassBot(playerGuid.GetCounter());
     bool linkedAccount = sPlayerbotAIConfig.allowTrustedAccountBots && IsAccountLinked(accountId, masterAccountId);
+    bool isHeroBot = (accountId == 102); // RNDBOT_HERO_JAINA (HeroBot especial)
 
     bool allowed = true;
     std::ostringstream out;
     std::string botName;
     sCharacterCache->GetCharacterNameByGuid(playerGuid, botName);
-    if (!isRndbot && !sameAccount && !sameGuild && !addClassBot && !linkedAccount)
+    if (!isRndbot && !sameAccount && !sameGuild && !addClassBot && !linkedAccount && !isHeroBot)
     {
         allowed = false;
         out << "Failure: You are not allowed to control bot " << botName.c_str();
@@ -619,10 +644,10 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
         auto inviteOp = std::make_unique<GroupInviteOperation>(master->GetGUID(), bot->GetGUID());
         PlayerbotWorldThreadProcessor::instance().QueueOperation(std::move(inviteOp));
     }
-    // if (master)
-    // {
-    //     // bot->TeleportTo(master);
-    // }
+    if (master)
+    {
+        bot->TeleportTo(master->GetMapId(), master->GetPositionX(), master->GetPositionY(), master->GetPositionZ(), master->GetOrientation());
+    }
     uint32 accountId = bot->GetSession()->GetAccountId();
     bool isRandomAccount = sPlayerbotAIConfig.IsInRandomAccountList(accountId);
 
@@ -732,7 +757,14 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
     if (cmd == "add" || cmd == "addaccount" || cmd == "login")
     {
         if (ObjectAccessor::FindPlayer(guid))
+        {
+            if (masterAccountId)
+            {
+                AddPlayerBot(guid, masterAccountId);
+                return "ok";
+            }
             return "player already logged in";
+        }
 
         // For addaccount command, verify it's an account name
         if (cmd == "addaccount")

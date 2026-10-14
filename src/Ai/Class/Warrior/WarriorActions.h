@@ -106,7 +106,11 @@ DEBUFF_ACTION_R(CastPiercingHowlAction, "piercing howl", 8.0f);
 BUFF_ACTION(CastRampageAction, "rampage");
 
 // protection
-MELEE_ACTION_U(CastTauntAction, "taunt", GetTarget() && GetTarget()->GetTarget() != bot->GetGUID());
+class CastTauntAction : public CastTauntSpellAction
+{
+public:
+    CastTauntAction(PlayerbotAI* botAI) : CastTauntSpellAction(botAI, "taunt") {}
+};
 SNARE_ACTION(CastTauntOnSnareTargetAction, "taunt");
 BUFF_ACTION(CastBloodrageAction, "bloodrage");
 MELEE_ACTION(CastShieldBashAction, "shield bash");

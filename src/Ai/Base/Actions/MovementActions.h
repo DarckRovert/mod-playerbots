@@ -114,6 +114,8 @@ public:
     bool Execute(Event event) override;
 
 protected:
+    bool AvoidHostileDynamicObjects();
+    bool HasHostileDynamicObjectDanger();
     bool AvoidAuraWithDynamicObj();
     bool AvoidGameObjectWithDamage();
     bool AvoidUnitWithDamageAura();

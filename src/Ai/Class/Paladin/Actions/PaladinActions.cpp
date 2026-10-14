@@ -580,11 +580,19 @@ bool CastHandOfFreedomOnPartyAction::isUseful()
 
 Unit* CastRighteousDefenseAction::GetTarget()
 {
+    Unit* tauntTarget = AI_VALUE(Unit*, "tank taunt target");
+    if (tauntTarget && tauntTarget->GetVictim() && tauntTarget->GetVictim() != bot)
+        return tauntTarget->GetVictim();
+
     Unit* current_target = AI_VALUE(Unit*, "current target");
     if (!current_target)
         return nullptr;
 
-    return current_target->GetVictim();
+    Unit* victim = current_target->GetVictim();
+    if (victim && victim != bot)
+        return victim;
+
+    return nullptr;
 }
 
 bool CastDivineSacrificeAction::isUseful()

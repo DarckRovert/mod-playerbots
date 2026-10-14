@@ -480,6 +480,34 @@ std::string const CastProtectSpellAction::GetTargetName() { return "party member
 
 bool CastProtectSpellAction::isUseful() { return GetTarget() && !botAI->HasAura(spell, GetTarget()); }
 
+CastTauntSpellAction::CastTauntSpellAction(PlayerbotAI* botAI, std::string const spell)
+    : CastSpellAction(botAI, spell)
+{
+}
+
+bool CastTauntSpellAction::isUseful()
+{
+    Unit* target = GetTarget();
+    if (!target || !target->IsAlive() || target->IsFriendlyTo(bot))
+        return false;
+
+    if (target->GetVictim() == bot)
+        return false;
+
+    return CastSpellAction::isUseful();
+}
+
+bool CastTauntSpellAction::Execute(Event event)
+{
+    Unit* target = GetTarget();
+    bool result = CastSpellAction::Execute(event);
+    if (result && target && target != AI_VALUE(Unit*, "current target"))
+    {
+        bot->Attack(target, true);
+    }
+    return result;
+}
+
 bool CastVehicleSpellAction::isPossible()
 {
     uint32 spellId = AI_VALUE2(uint32, "vehicle spell id", spell);

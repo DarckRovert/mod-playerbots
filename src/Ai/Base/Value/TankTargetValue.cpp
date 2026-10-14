@@ -134,3 +134,78 @@ Unit* TankTargetValue::Calculate()
     FindTankTargetSmartStrategy strategy(botAI);
     return FindTarget(&strategy);
 }
+
+Unit* TankTauntTargetValue::Calculate()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsInWorld())
+        return nullptr;
+
+    GuidVector attackers = AI_VALUE(GuidVector, "attackers");
+    Unit* bestHealerAttacker = nullptr;
+    float closestHealerDist = 9999.0f;
+
+    Unit* bestNonTankAttacker = nullptr;
+    float closestNonTankDist = 9999.0f;
+
+    for (ObjectGuid const& guid : attackers)
+    {
+        Unit* attacker = botAI->GetUnit(guid);
+        if (!attacker || !attacker->IsAlive() || attacker->IsFriendlyTo(bot))
+            continue;
+
+        Unit* victim = attacker->GetVictim();
+        if (!victim || victim == bot)
+            continue;
+
+        Player* victimPlayer = victim->ToPlayer();
+        if (!victimPlayer)
+            continue;
+
+        // If victim is another tank, the mob is under control
+        if (botAI->IsTank(victimPlayer))
+            continue;
+
+        float dist = bot->GetDistance(attacker);
+
+        // Priority 1: Attacker targeting a HEALER
+        if (botAI->IsHeal(victimPlayer))
+        {
+            if (dist < closestHealerDist)
+            {
+                closestHealerDist = dist;
+                bestHealerAttacker = attacker;
+            }
+        }
+        // Priority 2: Attacker targeting ANY OTHER NON-TANK (DPS, cloth, etc.)
+        else
+        {
+            if (dist < closestNonTankDist)
+            {
+                closestNonTankDist = dist;
+                bestNonTankAttacker = attacker;
+            }
+        }
+    }
+
+    if (bestHealerAttacker)
+        return bestHealerAttacker;
+
+    if (bestNonTankAttacker)
+        return bestNonTankAttacker;
+
+    // Priority 3: Current target has lost aggro to non-tank
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->IsAlive() && !currentTarget->IsFriendlyTo(bot))
+    {
+        Unit* victim = currentTarget->GetVictim();
+        if (victim && victim != bot)
+        {
+            if (!victim->IsPlayer() || !botAI->IsTank(victim->ToPlayer()))
+                return currentTarget;
+        }
+    }
+
+    return nullptr;
+}
+

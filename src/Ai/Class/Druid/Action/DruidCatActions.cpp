@@ -5,3 +5,13 @@
  */
 
 #include "DruidCatActions.h"
+#include "Playerbots.h"
+
+bool CastCowerAction::isUseful()
+{
+    if (!CastBuffSpellAction::isUseful())
+        return false;
+
+    Unit* target = AI_VALUE(Unit*, "current target");
+    return !(target && target->IsPlayer());
+}

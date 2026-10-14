@@ -38,14 +38,18 @@ public:
     std::vector<NextAction> getPrerequisites() override;
 };
 
-class CastDarkCommandAction : public CastSpellAction
+class CastDarkCommandAction : public CastTauntSpellAction
 {
 public:
-    CastDarkCommandAction(PlayerbotAI* botAI) : CastSpellAction(botAI, "dark command") {}
+    CastDarkCommandAction(PlayerbotAI* botAI) : CastTauntSpellAction(botAI, "dark command") {}
 };
 
-BEGIN_RANGED_SPELL_ACTION(CastDeathGripAction, "death grip")
-END_SPELL_ACTION()
+class CastDeathGripAction : public CastSpellAction
+{
+public:
+    CastDeathGripAction(PlayerbotAI* botAI) : CastSpellAction(botAI, "death grip") {}
+    std::string const GetTargetName() override;
+};
 
 // Unholy presence
 class CastUnholyMeleeSpellAction : public CastMeleeSpellAction

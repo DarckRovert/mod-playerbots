@@ -5,10 +5,14 @@
  */
 
 #include "MovementActions.h"
+#include "CellImpl.h"
 #include "Corpse.h"
+#include "DynamicObject.h"
 #include "Event.h"
 #include "FleeManager.h"
 #include "GameObject.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 #include "LastMovementValue.h"
 #include "LootObjectStack.h"
 #include "Map.h"
@@ -1837,11 +1841,118 @@ bool AvoidAoeAction::isUseful()
 
     GuidVector traps = AI_VALUE(GuidVector, "nearest trap with damage");
     GuidVector triggers = AI_VALUE(GuidVector, "possible triggers");
-    return AI_VALUE(Aura*, "area debuff") || !traps.empty() || !triggers.empty();
+    return AI_VALUE(Aura*, "area debuff") || !traps.empty() || !triggers.empty() || HasHostileDynamicObjectDanger();
+}
+
+bool AvoidAoeAction::HasHostileDynamicObjectDanger()
+{
+    if (!sPlayerbotAIConfig.enableSpatialDangerAvoidance)
+        return false;
+
+    std::list<WorldObject*> objs;
+    float scanRadius = 15.0f;
+    Acore::AllWorldObjectsInRange check(bot, scanRadius);
+    Acore::WorldObjectListSearcher<Acore::AllWorldObjectsInRange> searcher(
+        bot, objs, check, GRID_MAP_TYPE_MASK_DYNAMICOBJECT);
+    Cell::VisitObjects(bot, searcher, scanRadius);
+
+    for (WorldObject* obj : objs)
+    {
+        if (obj->GetTypeId() != TYPEID_DYNAMICOBJECT)
+            continue;
+
+        DynamicObject* dynObj = static_cast<DynamicObject*>(obj);
+        if (!dynObj || !dynObj->IsInWorld())
+            continue;
+
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(dynObj->GetSpellId());
+        if (!spellInfo || spellInfo->IsPositive())
+            continue;
+
+        if (sPlayerbotAIConfig.aoeAvoidSpellWhitelist.find(spellInfo->Id) !=
+            sPlayerbotAIConfig.aoeAvoidSpellWhitelist.end())
+            continue;
+
+        Unit* caster = dynObj->GetCaster();
+        if (caster && !bot->IsHostileTo(caster))
+            continue;
+
+        float radius = dynObj->GetRadius();
+        if (radius <= 0.0f || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
+            radius = 8.0f;
+
+        if (bot->GetDistance(dynObj) <= radius + 1.0f)
+            return true;
+    }
+    return false;
+}
+
+bool AvoidAoeAction::AvoidHostileDynamicObjects()
+{
+    if (!sPlayerbotAIConfig.enableSpatialDangerAvoidance)
+        return false;
+
+    std::list<WorldObject*> objs;
+    float scanRadius = 15.0f;
+    Acore::AllWorldObjectsInRange check(bot, scanRadius);
+    Acore::WorldObjectListSearcher<Acore::AllWorldObjectsInRange> searcher(
+        bot, objs, check, GRID_MAP_TYPE_MASK_DYNAMICOBJECT);
+    Cell::VisitObjects(bot, searcher, scanRadius);
+
+    for (WorldObject* obj : objs)
+    {
+        if (obj->GetTypeId() != TYPEID_DYNAMICOBJECT)
+            continue;
+
+        DynamicObject* dynObj = static_cast<DynamicObject*>(obj);
+        if (!dynObj || !dynObj->IsInWorld())
+            continue;
+
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(dynObj->GetSpellId());
+        if (!spellInfo || spellInfo->IsPositive())
+            continue;
+
+        if (sPlayerbotAIConfig.aoeAvoidSpellWhitelist.find(spellInfo->Id) !=
+            sPlayerbotAIConfig.aoeAvoidSpellWhitelist.end())
+            continue;
+
+        Unit* caster = dynObj->GetCaster();
+        if (caster && !bot->IsHostileTo(caster))
+            continue;
+
+        float radius = dynObj->GetRadius();
+        if (radius <= 0.0f || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
+            radius = 8.0f;
+
+        if (bot->GetDistance(dynObj) <= radius + 1.0f)
+        {
+            std::ostringstream name;
+            name << spellInfo->SpellName[LOCALE_enUS];
+            if (FleePosition(dynObj->GetPosition(), radius + 2.0f))
+            {
+                if (sPlayerbotAIConfig.tellWhenAvoidAoe && lastTellTimer < time(NULL) - 10)
+                {
+                    lastTellTimer = time(NULL);
+                    lastMoveTimer = getMSTime();
+                    std::ostringstream out;
+                    out << "I'm avoiding " << name.str() << " (" << spellInfo->Id << ") Radius " << radius << " - [Dynamic Hazard]";
+                    bot->Say(out.str(), LANG_UNIVERSAL);
+                }
+                lastMoveTimer = getMSTime();
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool AvoidAoeAction::Execute(Event /*event*/)
 {
+    // Case #0: Proactive Hostile Dynamic Object Avoidance (Blizzard, Rain of Fire, Flamestrike, D&D, etc.)
+    if (AvoidHostileDynamicObjects())
+    {
+        return true;
+    }
     // Case #1: Aura with dynamic object (e.g. rain of fire)
     if (AvoidAuraWithDynamicObj())
     {

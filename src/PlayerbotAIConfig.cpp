@@ -180,6 +180,15 @@ bool PlayerbotAIConfig::Initialize()
     randomBotRpgChance = sConfigMgr->GetOption<float>("AiPlayerbot.RandomBotRpgChance", 0.20f);
 
     iterationsPerTick = sConfigMgr->GetOption<int32>("AiPlayerbot.IterationsPerTick", 10);
+    maxIterationsPerTick = sConfigMgr->GetOption<uint32>("AiPlayerbot.MaxIterationsPerTick", 35);
+
+    enableHumanCognitiveDelay = sConfigMgr->GetOption<bool>("AiPlayerbot.EnableHumanCognitiveDelay", true);
+    humanReactionDelayMin = sConfigMgr->GetOption<uint32>("AiPlayerbot.HumanReactionDelayMin", 220);
+    humanReactionDelayMax = sConfigMgr->GetOption<uint32>("AiPlayerbot.HumanReactionDelayMax", 360);
+    enableSpatialDangerAvoidance = sConfigMgr->GetOption<bool>("AiPlayerbot.EnableSpatialDangerAvoidance", true);
+    enableSquadTacticalCoordination = sConfigMgr->GetOption<bool>("AiPlayerbot.EnableSquadTacticalCoordination", true);
+    stochasticUtilitySelection = sConfigMgr->GetOption<bool>("AiPlayerbot.StochasticUtilitySelection", true);
+    stochasticUtilityTemperature = sConfigMgr->GetOption<float>("AiPlayerbot.StochasticUtilityTemperature", 0.15f);
 
     allowAccountBots = sConfigMgr->GetOption<bool>("AiPlayerbot.AllowAccountBots", true);
     allowGuildBots = sConfigMgr->GetOption<bool>("AiPlayerbot.AllowGuildBots", true);

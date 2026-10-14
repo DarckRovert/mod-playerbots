@@ -288,6 +288,9 @@ public:
 
     bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Group* group) override
     {
+        if (!group)
+            return true;
+
         for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
             Player* const member = itr->GetSource();
@@ -326,7 +329,11 @@ public:
             if (bot->GetGuildId() != player->GetGuildId())
                 continue;
 
-            PlayerbotsMgr::instance().GetPlayerbotAI(bot)->HandleCommand(type, msg, player);
+            PlayerbotAI* const botAI = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+            if (botAI == nullptr)
+                continue;
+
+            botAI->HandleCommand(type, msg, player);
         }
 
         return true;
@@ -334,9 +341,12 @@ public:
 
     bool OnPlayerCanUseChat(Player* player, uint32 type, uint32 /*lang*/, std::string& msg, Channel* channel) override
     {
+        if (!channel)
+            return true;
+
         PlayerbotMgr* const playerbotMgr = PlayerbotsMgr::instance().GetPlayerbotMgr(player);
 
-        if (playerbotMgr != nullptr && channel->GetFlags() & 0x18)
+        if (playerbotMgr != nullptr && (channel->GetFlags() & 0x18))
             playerbotMgr->HandleCommand(type, msg);
 
         sRandomPlayerbotMgr.HandleCommand(type, msg, player);

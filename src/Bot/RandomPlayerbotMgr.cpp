@@ -1314,24 +1314,26 @@ void RandomPlayerbotMgr::CheckPlayers()
 
     LOG_INFO("playerbots", "Checking Players...");
 
-    if (!playersLevel)
-        playersLevel = sPlayerbotAIConfig.randombotStartingLevel;
+    uint32 maxRealPlayerLevel = sPlayerbotAIConfig.randombotStartingLevel;
 
     for (std::vector<Player*>::iterator i = players.begin(); i != players.end(); ++i)
     {
         Player* player = *i;
 
-        if (player->IsGameMaster())
+        if (!player || player->IsGameMaster())
             continue;
 
         // if (player->GetSession()->GetSecurity() > SEC_PLAYER)
         //     continue;
 
-        if (player->GetLevel() > playersLevel)
-            playersLevel = player->GetLevel() + 3;
+        if (player->GetLevel() > maxRealPlayerLevel)
+            maxRealPlayerLevel = player->GetLevel();
     }
 
-    LOG_INFO("playerbots", "Max player level is {}, max bot level set to {}", playersLevel - 3, playersLevel);
+    uint32 const maxWorldLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+    playersLevel = std::min(maxRealPlayerLevel + 3, maxWorldLevel);
+
+    LOG_INFO("playerbots", "Max real player level is {}, max bot level synced to {}", maxRealPlayerLevel, playersLevel);
 }
 
 void RandomPlayerbotMgr::ScheduleRandomize(uint32 bot, uint32 time) { SetEventValue(bot, "randomize", 1, time); }
@@ -2657,6 +2659,14 @@ void RandomPlayerbotMgr::OnBotLoginInternal(Player* const bot)
     {
         PlayerbotFactory factory(bot, bot->GetLevel());
         factory.InitGuild();
+    }
+
+    // Automated Equipment Safeguard: If bot is missing a weapon or chest on login, equip it immediately
+    if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) ||
+        !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST))
+    {
+        PlayerbotFactory factory(bot, bot->GetLevel());
+        factory.InitEquipment(false, false);
     }
 
     RandomPlayerbotFactory::AssignBotToArenaTeam(bot);

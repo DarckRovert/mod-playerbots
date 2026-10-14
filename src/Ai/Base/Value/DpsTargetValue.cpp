@@ -5,8 +5,12 @@
  */
 
 #include "DpsTargetValue.h"
+#include "AttackersValue.h"
+#include "Group.h"
+#include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
+#include "ServerFacade.h"
 #include "Strategy.h"
 
 class DpsFindTargetStrategy : public FindTargetStrategy
@@ -15,6 +19,11 @@ public:
     DpsFindTargetStrategy(PlayerbotAI* botAI) : FindTargetStrategy(botAI) {}
 
     TargetValueExclusionType GetExclusionType() override { return TargetValueExclusionType::Dps; }
+
+    bool IsCrowdControlled(Unit* attacker) const
+    {
+        return sPlayerbotAIConfig.enableSquadTacticalCoordination && attacker->HasBreakableByDamageCrowdControlAura();
+    }
 };
 
 class FindMaxThreatGapTargetStrategy : public DpsFindTargetStrategy
@@ -67,7 +76,7 @@ public:
             if (guid && attacker->GetGUID() == guid)
                 return;
         }
-        if (!attacker->IsAlive())
+        if (!attacker->IsAlive() || IsCrowdControlled(attacker))
             return;
 
         if (foundHighPriority)
@@ -149,7 +158,7 @@ public:
             if (guid && attacker->GetGUID() == guid)
                 return;
         }
-        if (!attacker->IsAlive())
+        if (!attacker->IsAlive() || IsCrowdControlled(attacker))
             return;
 
         if (foundHighPriority)
@@ -219,7 +228,7 @@ public:
             if (guid && attacker->GetGUID() == guid)
                 return;
         }
-        if (!attacker->IsAlive())
+        if (!attacker->IsAlive() || IsCrowdControlled(attacker))
             return;
 
         if (foundHighPriority)
@@ -283,6 +292,62 @@ Unit* DpsTargetValue::Calculate()
     Unit* rti = RtiTargetValue::Calculate();
     if (rti)
         return rti;
+
+    // Pillar III: Squad Tactical Coordination (Skull/Cross Focus & Tank Assist)
+    if (sPlayerbotAIConfig.enableSquadTacticalCoordination)
+    {
+        if (Group* group = bot->GetGroup())
+        {
+            // 1. Raid Target Icon Priority: Skull (7) then Cross (6)
+            for (int32 icon : {7, 6})
+            {
+                ObjectGuid iconGuid = group->GetTargetIcon(icon);
+                if (iconGuid)
+                {
+                    Unit* markedUnit = botAI->GetUnit(iconGuid);
+                    if (markedUnit && markedUnit->IsAlive() && AttackersValue::IsValidTarget(markedUnit, bot) &&
+                        bot->IsWithinLOSInMap(markedUnit) &&
+                        ServerFacade::instance().GetDistance2d(bot, markedUnit) <= sPlayerbotAIConfig.sightDistance)
+                    {
+                        return markedUnit;
+                    }
+                }
+            }
+
+            // 2. Tank Assist: Focus fire on the group tank's target
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                Player* member = itr->GetSource();
+                if (member && member->IsInWorld() && member->IsAlive() && member != bot && PlayerbotAI::IsTank(member))
+                {
+                    Unit* tankVictim = member->GetVictim();
+                    if (tankVictim && tankVictim->IsAlive() && AttackersValue::IsValidTarget(tankVictim, bot) &&
+                        bot->IsWithinLOSInMap(tankVictim) &&
+                        ServerFacade::instance().GetDistance2d(bot, tankVictim) <= sPlayerbotAIConfig.sightDistance &&
+                        !tankVictim->HasBreakableByDamageCrowdControlAura())
+                    {
+                        return tankVictim;
+                    }
+                }
+            }
+
+            // 3. Master Assist: If no group tank target found, assist the party leader / master
+            if (Player* master = botAI->GetMaster())
+            {
+                if (master->IsInWorld() && master->IsAlive() && master != bot)
+                {
+                    Unit* masterVictim = master->GetVictim();
+                    if (masterVictim && masterVictim->IsAlive() && AttackersValue::IsValidTarget(masterVictim, bot) &&
+                        bot->IsWithinLOSInMap(masterVictim) &&
+                        ServerFacade::instance().GetDistance2d(bot, masterVictim) <= sPlayerbotAIConfig.sightDistance &&
+                        !masterVictim->HasBreakableByDamageCrowdControlAura())
+                    {
+                        return masterVictim;
+                    }
+                }
+            }
+        }
+    }
 
     float dps = AI_VALUE(float, "estimated group dps");
 

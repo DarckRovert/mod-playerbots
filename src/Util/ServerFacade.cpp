@@ -41,15 +41,19 @@ bool ServerFacade::IsDistanceLessOrEqualThan(float dist1, float dist2) { return 
 
 void ServerFacade::SetFacingTo(Player* bot, WorldObject* wo, bool /*force*/)
 {
-    if (!bot)
+    if (!bot || !wo)
         return;
 
     float angle = bot->GetAngle(wo);
+    float currentAngle = bot->GetOrientation();
+    float diff = std::abs(angle - currentAngle);
+    if (diff > static_cast<float>(M_PI))
+        diff = static_cast<float>(2.0 * M_PI) - diff;
 
-    // if (!force && bot->isMoving())
-    //     bot->SetFacingTo(bot->GetAngle(wo));
-    // else
-    // {
+    // Angular deadzone: If orientation change is under ~0.08 radians (~4.5 deg), avoid redundant packet flooding
+    if (diff < 0.08f)
+        return;
+
     bot->SetOrientation(angle);
 
     if (!bot->IsRooted())

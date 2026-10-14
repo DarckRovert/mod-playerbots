@@ -845,6 +845,7 @@ void PlayerbotFactory::Randomize(bool incremental)
     {
         ClearSkills();
         ClearSpells();
+        InitActionButtons(true);
         ResetQuests();
 
         if (!sPlayerbotAIConfig.equipAndSpecPersistence ||
@@ -950,8 +951,15 @@ void PlayerbotFactory::Randomize(bool incremental)
 
     pmo = sPerfMonitor.start(PERF_MON_RNDBOT, "PlayerbotFactory_Equip");
     LOG_DEBUG("playerbots", "Initializing equipmemt...");
-    if (!incremental || !sPlayerbotAIConfig.equipAndSpecPersistence ||
-        bot->GetLevel() < sPlayerbotAIConfig.equipAndSpecPersistenceLevel)
+    bool forceFullEquip = !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) ||
+                          !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST);
+    if (forceFullEquip)
+    {
+        InitEquipment(false, sPlayerbotAIConfig.twoRoundsGearInit);
+    }
+    else if (!incremental || !sPlayerbotAIConfig.equipAndSpecPersistence ||
+             bot->GetLevel() < sPlayerbotAIConfig.equipAndSpecPersistenceLevel ||
+             sPlayerbotAIConfig.autoUpgradeEquip)
     {
         InitEquipment(incremental, incremental ? false : sPlayerbotAIConfig.twoRoundsGearInit);
     }
@@ -1074,6 +1082,8 @@ void PlayerbotFactory::Randomize(bool incremental)
         if (pmo)
             pmo->finish();
     }
+
+    InitActionButtons(false);
 
     pmo = sPerfMonitor.start(PERF_MON_RNDBOT, "PlayerbotFactory_Save");
     LOG_DEBUG("playerbots", "Saving to DB...");
@@ -1657,6 +1667,7 @@ void PlayerbotFactory::ClearEverything()
     bot->resetTalents(true);
     ClearSkills();
     ClearSpells();
+    InitActionButtons(true);
     ClearInventory();
     ResetQuests();
     // bot->SaveToDB(false, false);
@@ -1680,6 +1691,38 @@ void PlayerbotFactory::ClearSpells()
     for (std::list<uint32>::iterator i = spells.begin(); i != spells.end(); ++i)
     {
         bot->removeSpell(*i, SPEC_MASK_ALL, false);
+    }
+}
+
+void PlayerbotFactory::InitActionButtons(bool reset)
+{
+    if (reset)
+    {
+        for (uint8 button = 0; button < MAX_ACTION_BUTTONS; ++button)
+        {
+            bot->removeActionButton(button);
+        }
+
+        if (PlayerInfo const* info = sObjectMgr->GetPlayerInfo(bot->getRace(), bot->getClass()))
+        {
+            for (auto const& action : info->action)
+            {
+                bot->addActionButton(action.button, action.action, action.type);
+            }
+        }
+    }
+    else
+    {
+        for (uint8 button = 0; button < MAX_ACTION_BUTTONS; ++button)
+        {
+            if (ActionButton const* ab = bot->GetActionButton(button))
+            {
+                if (ab->GetType() == ACTION_BUTTON_SPELL && !bot->HasSpell(ab->GetAction()))
+                {
+                    bot->removeActionButton(button);
+                }
+            }
+        }
     }
 }
 

@@ -278,6 +278,17 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 
     AllowActivity();
 
+    // Emergency Combat Interruption: If bot enters combat while in a long delay (e.g. eating/drinking),
+    // immediately clamp delay to reaction time and stand up so it never remains a helpless sitting target.
+    if (bot->IsInCombat())
+    {
+        if (nextAICheckDelay > sPlayerbotAIConfig.reactDelay)
+            nextAICheckDelay = sPlayerbotAIConfig.reactDelay;
+
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+    }
+
     if (!CanUpdateAI())
         return;
 
@@ -344,8 +355,8 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     }
                 }
 
-                // Interrupt if target ally has full health (heal by other member)
-                if (isHeal && isSingleTarget && spellTarget && spellTarget->IsFullHealth())
+                // Interrupt if target ally has full health or is topped off (overheal prevention)
+                if (isHeal && isSingleTarget && spellTarget && (spellTarget->IsFullHealth() || spellTarget->GetHealthPct() >= 96.0f))
                 {
                     bot->InterruptSpell(currentSpell->GetCurrentContainer());
                     YieldThread(bot, GetReactDelay());
@@ -489,10 +500,12 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
     if (!bot->GetMap())
         return; // instances are created and destroyed on demand
 
-    // kinda expensive call to make on every single updateAI, do we really need this information?
-    std::string const mapString = WorldPosition(bot).isOverworld() ? std::to_string(bot->GetMapId()) : "I";
-    PerfMonitorOperation* pmo =
-        sPerfMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString);
+    PerfMonitorOperation* pmo = nullptr;
+    if (PerfMonitor::IsEnabled())
+    {
+        std::string const mapString = WorldPosition(bot).isOverworld() ? std::to_string(bot->GetMapId()) : "I";
+        pmo = sPerfMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString);
+    }
 
     ExternalEventHelper helper(aiObjectContext);
 
@@ -4296,6 +4309,19 @@ void PlayerbotAI::RequestSpellInterrupt()
         spellInterruptRequested = true;
 }
 
+uint32 PlayerbotAI::GetHumanReactionDelay() const
+{
+    if (!sPlayerbotAIConfig.enableHumanCognitiveDelay)
+        return 0;
+
+    uint32 minD = sPlayerbotAIConfig.humanReactionDelayMin;
+    uint32 maxD = sPlayerbotAIConfig.humanReactionDelayMax;
+    if (minD >= maxD)
+        return minD;
+
+    return urand(minD, maxD);
+}
+
 bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string const spell)
 {
     if (!IsValidUnit(target))
@@ -4304,6 +4330,47 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string const sp
     uint32 spellid = aiObjectContext->GetValue<uint32>("spell id", spell)->Get();
     if (!spellid || !target->IsNonMeleeSpellCast(true))
         return false;
+
+    // Pillar I: Human Cognitive Latency & Perception Guard
+    if (sPlayerbotAIConfig.enableHumanCognitiveDelay)
+    {
+        Spell* currentCasting = target->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        if (!currentCasting)
+            currentCasting = target->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+
+        if (currentCasting)
+        {
+            int32 totalCastTime = currentCasting->GetCastTime();
+            int32 remaining = currentCasting->GetCastTimeRemaining();
+            if (totalCastTime > 0)
+            {
+                int32 elapsed = totalCastTime - remaining;
+                if (elapsed < (int32)GetHumanReactionDelay())
+                    return false;
+
+                if (remaining < 50)
+                    return false;
+
+                // Group-coordinated staggered interrupt window to prevent simultaneous duplicate kicks
+                if (Group* group = bot->GetGroup())
+                {
+                    uint32 botSlot = (bot->GetGUID().GetCounter()) % 2;
+                    if (botSlot == 1)
+                    {
+                        // Backup interruptor waits until 60% of cast has elapsed
+                        if (elapsed < (totalCastTime * 60 / 100))
+                            return false;
+                    }
+                    else
+                    {
+                        // Primary interruptor attempts between reaction delay and 65% of cast
+                        if (elapsed > (totalCastTime * 65 / 100))
+                            return false;
+                    }
+                }
+            }
+        }
+    }
 
     SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellid);
     if (!spellInfo)
@@ -4353,6 +4420,19 @@ bool PlayerbotAI::HasAuraToDispel(Unit* target, uint32 dispelType)
         if (sPlayerbotAIConfig.dispelAuraDuration && aura->GetDuration() &&
             aura->GetDuration() < (int32)sPlayerbotAIConfig.dispelAuraDuration)
             continue;
+
+        // Pillar I: Human Cognitive Latency for Dispels
+        if (sPlayerbotAIConfig.enableHumanCognitiveDelay)
+        {
+            int32 maxDur = aura->GetMaxDuration();
+            int32 curDur = aura->GetDuration();
+            if (maxDur > 0 && curDur > 0)
+            {
+                int32 elapsedAura = maxDur - curDur;
+                if (elapsedAura < (int32)GetHumanReactionDelay())
+                    continue; // Human perception lag: icon has not registered yet
+            }
+        }
 
         SpellInfo const* spellInfo = aura->GetSpellInfo();
         if (!spellInfo)
@@ -4454,7 +4534,7 @@ Player* PlayerbotAI::FindNewMaster()
             return member;
 
         if (bot->InBattleground() && bot->GetBattleground() &&
-            bot->GetBattleground()->GetBgTypeID() == BATTLEGROUND_AV && !GET_PLAYERBOT_AI(member) &&
+            bot->GetBattleground()->GetBgTypeID(true) == BATTLEGROUND_AV && !GET_PLAYERBOT_AI(member) &&
             member->InBattleground() && bot->GetMapId() == member->GetMapId())
         {
             // Skip if same BG but same subgroup or lower level

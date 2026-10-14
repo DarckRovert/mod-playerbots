@@ -325,6 +325,16 @@ public:
 
     uint32 iterationsPerTick;
 
+    // Commercial AI Engine Enhancements (Pillars I - V)
+    bool enableHumanCognitiveDelay;
+    uint32 humanReactionDelayMin;
+    uint32 humanReactionDelayMax;
+    bool enableSpatialDangerAvoidance;
+    bool enableSquadTacticalCoordination;
+    bool stochasticUtilitySelection;
+    float stochasticUtilityTemperature;
+    uint32 maxIterationsPerTick;
+
     std::mutex m_logMtx;
     bool enableAutoTradeOnItemMention;
     std::vector<std::string> tradeActionExcludedPrefixes;

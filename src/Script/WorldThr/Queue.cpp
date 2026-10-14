@@ -7,9 +7,14 @@
 #include "Queue.h"
 #include "Log.h"
 #include "PlayerbotAIConfig.h"
+#include "Random.h"
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
 void Queue::Push(ActionBasket* action)
 {
+    cachedSelection = nullptr;
     if (!action)
     {
         return;
@@ -29,18 +34,48 @@ void Queue::Push(ActionBasket* action)
 
 ActionNode* Queue::Pop()
 {
-    ActionBasket* highestRelevanceBasket = findHighestRelevanceBasket();
-    if (!highestRelevanceBasket)
+    ActionBasket* basketToPop = nullptr;
+
+    if (cachedSelection)
+    {
+        for (ActionBasket* basket : actions)
+        {
+            if (basket == cachedSelection)
+            {
+                basketToPop = cachedSelection;
+                break;
+            }
+        }
+        cachedSelection = nullptr;
+    }
+
+    if (!basketToPop)
+    {
+        basketToPop = findHighestRelevanceBasket();
+    }
+
+    if (!basketToPop)
     {
         return nullptr;
     }
 
-    return extractAndDeleteBasket(highestRelevanceBasket);
+    return extractAndDeleteBasket(basketToPop);
 }
 
 ActionBasket* Queue::Peek()
 {
-    return findHighestRelevanceBasket();
+    if (cachedSelection)
+    {
+        for (ActionBasket* basket : actions)
+        {
+            if (basket == cachedSelection)
+                return cachedSelection;
+        }
+        cachedSelection = nullptr;
+    }
+
+    cachedSelection = findHighestRelevanceBasket();
+    return cachedSelection;
 }
 
 uint32 Queue::Size()
@@ -100,11 +135,56 @@ ActionBasket* Queue::findHighestRelevanceBasket() const
         }
     }
 
+    if (!selection || maxRelevance <= 0.0f)
+    {
+        return selection;
+    }
+
+    // Pillar IV: Stochastic Utility / Softmax Selection for Dynamic Rotations
+    // High-priority emergency actions (>= 40.0f) are kept 100% deterministic (interrupts, heals, immunities).
+    // Standard rotation actions within 10% of maximum relevance are sampled with softmax temperature.
+    if (sPlayerbotAIConfig.stochasticUtilitySelection && maxRelevance < 40.0f && actions.size() > 1)
+    {
+        float const threshold = maxRelevance * 0.90f;
+        std::vector<ActionBasket*> candidates;
+        std::vector<float> weights;
+        float totalWeight = 0.0f;
+        float temperature = std::max(0.01f, sPlayerbotAIConfig.stochasticUtilityTemperature);
+
+        for (ActionBasket* basket : actions)
+        {
+            if (basket && basket->getRelevance() >= threshold)
+            {
+                candidates.push_back(basket);
+                float weight = std::exp((basket->getRelevance() - maxRelevance) / temperature);
+                weights.push_back(weight);
+                totalWeight += weight;
+            }
+        }
+
+        if (candidates.size() > 1 && totalWeight > 0.0f)
+        {
+            float roll = frand(0.0f, totalWeight);
+            float accum = 0.0f;
+            for (size_t i = 0; i < candidates.size(); ++i)
+            {
+                accum += weights[i];
+                if (roll <= accum)
+                    return candidates[i];
+            }
+        }
+    }
+
     return selection;
 }
 
 ActionNode* Queue::extractAndDeleteBasket(ActionBasket* basket)
 {
+    if (cachedSelection == basket)
+    {
+        cachedSelection = nullptr;
+    }
+
     ActionNode* action = basket->getAction();
     actions.remove(basket);
     delete basket;
@@ -125,6 +205,7 @@ void Queue::collectExpiredBaskets(std::list<ActionBasket*>& expiredBaskets)
 
 void Queue::removeAndDeleteBaskets(std::list<ActionBasket*>& basketsToRemove)
 {
+    cachedSelection = nullptr;
     for (ActionBasket* basket : basketsToRemove)
     {
         actions.remove(basket);

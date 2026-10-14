@@ -390,6 +390,17 @@ public:
     ActionThreatType getThreatType() override { return ActionThreatType::None; }
 };
 
+class CastTauntSpellAction : public CastSpellAction
+{
+public:
+    CastTauntSpellAction(PlayerbotAI* botAI, std::string const spell);
+
+    std::string const GetTargetName() override { return "tank taunt target"; }
+    bool isUseful() override;
+    bool Execute(Event event) override;
+    ActionThreatType getThreatType() override { return ActionThreatType::Single; }
+};
+
 class CastVehicleSpellAction : public CastSpellAction
 {
 public:

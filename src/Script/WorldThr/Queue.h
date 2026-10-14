@@ -90,6 +90,7 @@ private:
     void removeAndDeleteBaskets(std::list<ActionBasket*>& basketsToRemove);
 
     std::list<ActionBasket*> actions; /**< Container for action baskets */
+    mutable ActionBasket* cachedSelection = nullptr;
 };
 
 #endif

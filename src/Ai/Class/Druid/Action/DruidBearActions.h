@@ -18,10 +18,10 @@ public:
     CastFeralChargeBearAction(PlayerbotAI* botAI) : CastReachTargetSpellAction(botAI, "feral charge - bear", 1.5f) {}
 };
 
-class CastGrowlAction : public CastSpellAction
+class CastGrowlAction : public CastTauntSpellAction
 {
 public:
-    CastGrowlAction(PlayerbotAI* botAI) : CastSpellAction(botAI, "growl") {}
+    CastGrowlAction(PlayerbotAI* botAI) : CastTauntSpellAction(botAI, "growl") {}
 };
 
 class CastChallengingRoarAction : public CastMeleeDebuffSpellAction

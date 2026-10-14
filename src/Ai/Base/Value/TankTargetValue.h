@@ -19,4 +19,14 @@ public:
     Unit* Calculate() override;
 };
 
+class TankTauntTargetValue : public UnitCalculatedValue
+{
+public:
+    TankTauntTargetValue(PlayerbotAI* botAI, std::string const name = "tank taunt target")
+        : UnitCalculatedValue(botAI, name) {}
+
+    Unit* Calculate() override;
+};
+
 #endif
+

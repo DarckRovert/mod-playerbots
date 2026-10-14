@@ -47,6 +47,10 @@ bool ShareQuestAction::Execute(Event event)
 
 bool AutoShareQuestAction::Execute(Event /*event*/)
 {
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
     bool shared = false;
 
     for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
@@ -54,12 +58,12 @@ bool AutoShareQuestAction::Execute(Event /*event*/)
         uint32 logQuest = bot->GetQuestSlotQuestId(slot);
         Quest const* quest = sObjectMgr->GetQuestTemplate(logQuest);
 
-        if (!quest)
+        if (!quest || !quest->HasFlag(QUEST_FLAGS_SHARABLE))
             continue;
 
         bool partyNeedsQuest = false;
 
-        for (GroupReference* itr = bot->GetGroup()->GetFirstMember(); itr != nullptr; itr = itr->next())
+        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
             Player* player = itr->GetSource();
 

@@ -105,7 +105,13 @@ bool TargetWithComboPointsLowerHealTrigger::IsActive()
            (target->GetHealth() / AI_VALUE(float, "estimated group dps")) <= lifeTime;
 }
 
-bool LoseAggroTrigger::IsActive() { return !AI_VALUE2(bool, "has aggro", "current target"); }
+bool LoseAggroTrigger::IsActive()
+{
+    if (AI_VALUE(Unit*, "tank taunt target"))
+        return true;
+
+    return !AI_VALUE2(bool, "has aggro", "current target");
+}
 
 bool HasAggroTrigger::IsActive() { return AI_VALUE2(bool, "has aggro", "current target"); }
 
@@ -561,7 +567,18 @@ bool IsNotBehindTargetTrigger::IsActive()
         return false;
 
     Unit* target = AI_VALUE(Unit*, "current target");
-    return target && !AI_VALUE2(bool, "behind", "current target");
+    if (!target)
+        return false;
+
+    // Do not attempt to get behind if bot has aggro or is tanking
+    if (target->GetVictim() == bot || botAI->HasStrategy("tank", botAI->GetState()))
+        return false;
+
+    // Target must be in melee range and not actively moving
+    if (!bot->IsWithinMeleeRange(target) || target->isMoving())
+        return false;
+
+    return !AI_VALUE2(bool, "behind", "current target");
 }
 
 bool IsNotFacingTargetTrigger::IsActive()

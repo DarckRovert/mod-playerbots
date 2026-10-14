@@ -100,6 +100,7 @@ public:
     void InitReputation();
     void InitAttunementQuests();
     void InitGuild();
+    void InitActionButtons(bool reset = false);
 
 private:
     enum class ProfessionSpecializationSpell : uint32

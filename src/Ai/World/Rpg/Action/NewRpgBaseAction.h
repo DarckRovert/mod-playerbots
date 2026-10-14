@@ -73,7 +73,7 @@ protected:
     // cone fallback wandering) doesn't spin for 5 minutes before
     // the teleport fires, but long enough that a genuine long
     // walk that is slowly making progress never triggers it.
-    const uint32 stuckTime = 90 * IN_MILLISECONDS;
+    const uint32 stuckTime = 15 * IN_MILLISECONDS;
 };
 
 #endif

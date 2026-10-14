@@ -100,3 +100,11 @@ Unit* CastHysteriaAction::GetTarget()
 
     return nullptr;
 }
+
+std::string const CastDeathGripAction::GetTargetName()
+{
+    if (AI_VALUE(Unit*, "tank taunt target"))
+        return "tank taunt target";
+    return "current target";
+}
+

@@ -87,6 +87,13 @@ Unit* PartyMemberToHeal::Calculate()
                 {
                     probeValue = health + player->GetDistance2d(bot) / 10.0f;
                 }
+
+                // Pillar IV: Tank survival triage priority in dungeon & raid encounters
+                if (PlayerbotAI::IsTank(player, true))
+                {
+                    probeValue -= 25.0f;
+                }
+
                 // delay Check player to here for better performance
                 if (probeValue < calc.minValue && Check(player))
                 {
@@ -163,7 +170,6 @@ Unit* HealerLowMana::Calculate()
 
 Unit* PartyMemberToProtect::Calculate()
 {
-    return nullptr;
     Group* group = bot->GetGroup();
     if (!group)
         return nullptr;

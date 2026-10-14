@@ -260,10 +260,10 @@ public:
     std::string const getName() override { return "purify disease on party"; }
 };
 
-class CastHandOfReckoningAction : public CastSpellAction
+class CastHandOfReckoningAction : public CastTauntSpellAction
 {
 public:
-    CastHandOfReckoningAction(PlayerbotAI* botAI) : CastSpellAction(botAI, "hand of reckoning") {}
+    CastHandOfReckoningAction(PlayerbotAI* botAI) : CastTauntSpellAction(botAI, "hand of reckoning") {}
 };
 
 class CastRighteousDefenseAction : public CastSpellAction

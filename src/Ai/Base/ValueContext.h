@@ -142,6 +142,7 @@ public:
         creators["group leader"] = &ValueContext::group_leader;
         creators["line target"] = &ValueContext::line_target;
         creators["tank target"] = &ValueContext::tank_target;
+        creators["tank taunt target"] = &ValueContext::tank_taunt_target;
         creators["dps target"] = &ValueContext::dps_target;
         creators["dps aoe target"] = &ValueContext::dps_aoe_target;
         creators["least hp target"] = &ValueContext::least_hp_target;
@@ -468,6 +469,7 @@ private:
     static UntypedValue* group_leader(PlayerbotAI* botAI) { return new GroupLeaderValue(botAI); }
     static UntypedValue* line_target(PlayerbotAI* botAI) { return new LineTargetValue(botAI); }
     static UntypedValue* tank_target(PlayerbotAI* botAI) { return new TankTargetValue(botAI); }
+    static UntypedValue* tank_taunt_target(PlayerbotAI* botAI) { return new TankTauntTargetValue(botAI); }
     static UntypedValue* dps_target(PlayerbotAI* botAI) { return new DpsTargetValue(botAI); }
     static UntypedValue* dps_aoe_target(PlayerbotAI* botAI) { return new DpsAoeTargetValue(botAI); }
     static UntypedValue* least_hp_target(PlayerbotAI* botAI) { return new LeastHpTargetValue(botAI); }
