@@ -2761,6 +2761,7 @@ AiPlayerbot.JainaCombatDropTarget = 1
 # Enables seamless next-target acquisition on the same tick upon enemy death
 # Default: 1
 AiPlayerbot.JainaNextTargetSameTick = 1
+AiPlayerbot.CoaNextTargetSameTick = 1
 
 # Enables high-priority target focus (fleeing runners, spellcasters, totems)
 # Default: 1
@@ -2773,20 +2774,56 @@ AiPlayerbot.JainaSnareFleeing = 1
 # Prevents DPS target jitter/flicker by applying hysteresis weighting to current target
 # Default: 1
 AiPlayerbot.JainaStickyTarget = 1
+AiPlayerbot.CoaStickyTarget = 1
 
 # Holds non-tank party members safely behind the active tank near healers to avoid frontals/cleaves
 # Default: 1
 AiPlayerbot.JainaHoldBehindTank = 1
+AiPlayerbot.CoaHoldBehindTank = 1
 
 # Leashes melee and ranged chasers so they do not run out of healer line of sight
 # Default: 1
-AiPlayerbot.JainaChaseLeashed = 1
+AiPlayerbot.JainaChaseLeash = 1
+AiPlayerbot.CoaChaseLeash = 1
 
-# Prevents bots from pathing through enemy aggro radii and pulling extra packs
+# Prevents bots from pathing through enemy aggro radii and pulling extra packs in dungeons/raids
 # Default: 1
-AiPlayerbot.JainaBodyPullAvoidance = 1
+AiPlayerbot.JainaBodyPullGuard = 1
+AiPlayerbot.CoaBodyPullGuard = 1
 
 # Smart healer self-preservation triage when under 50% health while preserving tank priority
 # Default: 1
 AiPlayerbot.JainaHealSelfFirst = 1
+AiPlayerbot.CoaHealSelfFirst = 1
+
+# A target that steps out of sight for a moment is kept (bot walks around instead of dropping fight)
+# Default: 1
+AiPlayerbot.JainaKeepTargetOutOfSight = 1
+AiPlayerbot.CoaKeepTargetOutOfSight = 1
+
+# Enables high-priority target focus on fleeing runners
+# Default: 1
+AiPlayerbot.JainaFocusRunners = 1
+AiPlayerbot.CoaFocusRunners = 1
+
+# Proactively moves to regain line of sight with obstructed combat targets
+# Default: 1
+AiPlayerbot.JainaRegainLineOfSight = 1
+AiPlayerbot.CoaRegainLineOfSight = 1
+
+# Disables erratic facing adjustments while pathfinding/moving to improve spline smoothness
+# Default: 1
+AiPlayerbot.JainaNoFacingWhileMoving = 1
+AiPlayerbot.CoaNoFacingWhileMoving = 1
+
+# Preserves combat state and cleans dead targets without resetting the combat evaluation loop
+# Default: 1
+AiPlayerbot.JainaKeepCombatEngine = 1
+AiPlayerbot.CoaKeepCombatEngine = 1
+
+# Advanced tank threat acquisition and pull coordination
+# Default: 1
+AiPlayerbot.JainaSmartTank = 1
+AiPlayerbot.CoaSmartTank = 1
+
 
