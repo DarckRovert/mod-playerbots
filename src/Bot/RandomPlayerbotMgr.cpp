@@ -381,13 +381,13 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
 
     if (sPlayerbotAIConfig.randomBotJoinBG /* && !players.empty()*/)
     {
-        if (time(nullptr) > (BgCheckTimer + 35))
+        if (time(nullptr) > (BgCheckTimer + 5))
             sRandomPlayerbotMgr.CheckBgQueue();
     }
 
     if (sPlayerbotAIConfig.randomBotJoinLfg /* && !players.empty()*/)
     {
-        if (time(nullptr) > (LfgCheckTimer + 30))
+        if (time(nullptr) > (LfgCheckTimer + 5))
             sRandomPlayerbotMgr.CheckLfgQueue();
     }
 
@@ -1132,8 +1132,8 @@ void RandomPlayerbotMgr::CheckBgQueue()
         }
     }
 
-    // If enabled, wait for all bots to have logged in before queueing for Arena's / BG's
-    if (sPlayerbotAIConfig.randomBotAutoJoinBG && playerBots.size() >= GetMaxAllowedBotCount())
+    // If enabled, wait for bots to have logged in before queueing for Arena's / BG's
+    if (sPlayerbotAIConfig.randomBotAutoJoinBG && !playerBots.empty())
     {
         uint32 randomBotAutoJoinArenaBracket = sPlayerbotAIConfig.randomBotAutoJoinArenaBracket;
         uint32 randomBotAutoJoinBGRatedArena2v2Count = sPlayerbotAIConfig.randomBotAutoJoinBGRatedArena2v2Count;
@@ -1271,7 +1271,7 @@ void RandomPlayerbotMgr::LogBattlegroundInfo()
 
 void RandomPlayerbotMgr::CheckLfgQueue()
 {
-    if (!LfgCheckTimer || time(nullptr) > (LfgCheckTimer + 30))
+    if (!LfgCheckTimer || time(nullptr) > (LfgCheckTimer + 5))
         LfgCheckTimer = time(nullptr);
 
     LOG_DEBUG("playerbots", "Checking LFG Queue...");

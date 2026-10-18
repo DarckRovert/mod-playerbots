@@ -200,12 +200,17 @@ bool LfgAcceptAction::Execute(Event event)
     // Try accept if already stored
     if (id)
     {
-        if (bot->IsInCombat() || bot->isDead())
+        // Project JAIna Instant-Queue: Never reject dungeon proposals due to world combat or death.
+        // Cleanse state immediately and accept; entering instance resets threat and health.
+        if (bot->isDead())
         {
-            WorldPacket* packet = new WorldPacket(CMSG_LFG_PROPOSAL_RESULT);
-            *packet << id << false;
-            bot->GetSession()->QueuePacket(packet);
-            return true;
+            bot->ResurrectPlayer(1.0f);
+            bot->SpawnCorpseBones();
+        }
+        if (bot->IsInCombat())
+        {
+            bot->CombatStop(true);
+            bot->ClearUnitState(UNIT_STATE_IN_COMBAT);
         }
 
         botAI->GetAiObjectContext()->GetValue<uint32>("lfg proposal")->Set(0);
@@ -235,12 +240,17 @@ bool LfgAcceptAction::Execute(Event event)
 
         if (id)
         {
-            if (bot->IsInCombat() || bot->isDead())
+            // Project JAIna Instant-Queue: Never reject dungeon proposals due to world combat or death.
+            // Cleanse state immediately and accept; entering instance resets threat and health.
+            if (bot->isDead())
             {
-                WorldPacket* packet = new WorldPacket(CMSG_LFG_PROPOSAL_RESULT);
-                *packet << id << false;
-                bot->GetSession()->QueuePacket(packet);
-                return true;
+                bot->ResurrectPlayer(1.0f);
+                bot->SpawnCorpseBones();
+            }
+            if (bot->IsInCombat())
+            {
+                bot->CombatStop(true);
+                bot->ClearUnitState(UNIT_STATE_IN_COMBAT);
             }
 
             botAI->GetAiObjectContext()->GetValue<uint32>("lfg proposal")->Set(0);
