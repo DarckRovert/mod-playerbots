@@ -19,19 +19,20 @@
 
 bool LootAction::Execute(Event /*event*/)
 {
-    if (!AI_VALUE(bool, "has available loot"))
+    if (AI_VALUE(LootObjectStack*, "available loot")->IsLootPending() || bot->GetLootGUID() ||
+        bot->IsNonMeleeSpellCast(false))
+        return false;
+
+    LootObject lootObject = AI_VALUE(LootObject, "nearest loot");
+    if (lootObject.IsEmpty() || !AI_VALUE(LootObjectStack*, "available loot")->CanAttemptLoot(lootObject.guid))
         return false;
 
     LootObject prevLoot = AI_VALUE(LootObject, "loot target");
-    LootObject const& lootObject =
-        AI_VALUE(LootObjectStack*, "available loot")->GetLoot(sPlayerbotAIConfig.lootDistance);
-
     if (!prevLoot.IsEmpty() && prevLoot.guid != lootObject.guid)
     {
         WorldPacket* packet = new WorldPacket(CMSG_LOOT_RELEASE, 8);
         *packet << prevLoot.guid;
         bot->GetSession()->QueuePacket(packet);
-        // bot->GetSession()->HandleLootReleaseOpcode(packet);
     }
 
     if (lootObject.guid.IsGameObject() &&
@@ -39,17 +40,35 @@ bool LootAction::Execute(Event /*event*/)
     {
         return false;  // Game object ID is disallowed, so do not proceed
     }
-    else
-    {
-        context->GetValue<LootObject>("loot target")->Set(lootObject);
-        return true;
-    }
+    context->GetValue<LootObject>("loot target")->Set(lootObject);
+    return true;
 }
 
 bool LootAction::isUseful()
 {
-    return sPlayerbotAIConfig.freeMethodLoot || !bot->GetGroup() ||
-    bot->GetGroup()->GetLootMethod() != FREE_FOR_ALL || IsSelfBot(bot);
+    if (!sPlayerbotAIConfig.freeMethodLoot && bot->GetGroup() && bot->GetGroup()->GetLootMethod() == FREE_FOR_ALL &&
+        !IsSelfBot(bot))
+        return false;
+
+    LootObject lootTarget = AI_VALUE(LootObject, "loot target");
+    LootObject nearest = AI_VALUE(LootObject, "nearest loot");
+    if (lootTarget.IsEmpty() || nearest.IsEmpty() || nearest.guid == lootTarget.guid ||
+        !AI_VALUE(LootObjectStack*, "available loot")->CanAttemptLoot(lootTarget.guid))
+        return true;
+
+    // Plain lookups: LootObject::GetWorldObject re-runs Refresh, which IsLootPossible below already pays.
+    WorldObject* nearestObject = botAI->GetWorldObject(nearest.guid);
+    WorldObject* currentObject = botAI->GetWorldObject(lootTarget.guid);
+    if (!nearestObject || !currentObject)
+        return true;
+
+    // Leave a valid target only for a clearly closer one, so two equidistant corpses on either side
+    // of an obstacle do not swap places on every tick.
+    constexpr float lootSwitchMargin = 3.0f;
+    if (bot->GetDistance(nearestObject) + lootSwitchMargin < bot->GetDistance(currentObject))
+        return true;
+
+    return !lootTarget.IsLootPossible(bot);
 }
 
 enum ProfessionSpells
@@ -72,8 +91,18 @@ enum ProfessionSpells
 bool OpenLootAction::Execute(Event /*event*/)
 {
     LootObject lootObject = AI_VALUE(LootObject, "loot target");
-    bool result = DoLoot(lootObject);
+    if (!availableLoot->CanAttemptLoot(lootObject.guid))
+        return false;
+
+    // DoLoot stops the bot first, which means "try again", not a failure; deferring after that
+    // stop would make the bot walk away and come back. Only a dry failure at rest defers.
+    bool const wasMoving = bot->isMoving();
+    bool const wasMounted = bot->IsMounted();
+
+    bool const result = DoLoot(lootObject);
     if (result)
+        availableLoot->BeginLoot(lootObject.guid);
+    else if (!lootObject.IsEmpty() && !wasMoving && !wasMounted)
     {
         AI_VALUE(LootObjectStack*, "available loot")->Remove(lootObject.guid);
         context->GetValue<LootObject>("loot target")->Set(LootObject());
@@ -87,7 +116,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         return false;
 
     Creature* creature = botAI->GetCreature(lootObject.guid);
-    if (creature && bot->GetDistance(creature) > INTERACTION_DISTANCE - 2.0f)
+    if (creature && !bot->IsWithinDistInMap(creature, INTERACTION_DISTANCE))
         return false;
 
     // Dismount if the bot is mounted
@@ -139,7 +168,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     }
 
     GameObject* go = botAI->GetGameObject(lootObject.guid);
-    if (go && bot->GetDistance(go) > INTERACTION_DISTANCE - 2.0f)
+    if (go && !go->IsAtInteractDistance(bot))
         return false;
 
     if (go && (go->GetGoState() != GO_STATE_READY))
