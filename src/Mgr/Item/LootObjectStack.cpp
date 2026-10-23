@@ -13,6 +13,18 @@
 
 #define MAX_LOOT_OBJECT_COUNT 200
 
+constexpr uint8 MAX_LOOT_RETRY_ATTEMPTS = 5;
+constexpr std::chrono::seconds LOOT_RETRY_MIN_DELAY(1);
+constexpr std::chrono::seconds LOOT_RETRY_MAX_DELAY(16);
+
+namespace
+{
+bool IsGatheringSkill(uint32 skillId)
+{
+    return skillId == SKILL_SKINNING || skillId == SKILL_HERBALISM || skillId == SKILL_MINING ||
+           skillId == SKILL_ENGINEERING;
+}
+}  // namespace
 LootTarget::LootTarget(ObjectGuid guid) : guid(guid), asOfTime(time(nullptr)) {}
 
 LootTarget::LootTarget(LootTarget const& other)
@@ -83,6 +95,10 @@ void LootObject::Refresh(Player* bot, ObjectGuid lootGUID)
     GameObject* go = botAI->GetGameObject(lootGUID);
     if (go && go->isSpawned() && go->GetGoState() == GO_STATE_READY)
     {
+        // The client refuses to use hostile game objects.
+        if (go->IsHostileTo(bot))
+            return;
+
         bool onlyHasQuestItems = true;
         bool hasAnyQuestItems = false;
         bool neededQuestItem = false;
@@ -317,7 +333,8 @@ bool LootObject::IsLootPossible(Player* bot)
     Creature* creature = botAI->GetCreature(guid);
     if (creature && creature->getDeathState() == DeathState::Corpse)
     {
-        if (!bot->isAllowedToLoot(creature) && skillId != SKILL_SKINNING)
+        // Gathering does not need loot rights.
+        if (!bot->isAllowedToLoot(creature) && !IsGatheringSkill(skillId))
             return false;
     }
 
