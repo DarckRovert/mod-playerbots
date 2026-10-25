@@ -7,9 +7,11 @@
 #ifndef PLAYERBOTS_BATTLEGROUNDTACTICS_H
 #define PLAYERBOTS_BATTLEGROUNDTACTICS_H
 
-#include "BattlegroundAV.h"
-#include "MovementActions.h"
+#include "Common.h"
 #include "Position.h"
+#include "MovementActions.h"
+#include "BattlegroundAV.h"
+#include "Event.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -17,6 +19,7 @@
 class ChatHandler;
 class Battleground;
 class PlayerbotAI;
+class WorldSession;
 
 #define SPELL_CAPTURE_BANNER 21651
 
