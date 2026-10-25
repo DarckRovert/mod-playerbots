@@ -9,11 +9,14 @@
 
 #include "BattlegroundAV.h"
 #include "MovementActions.h"
+#include "Position.h"
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 class ChatHandler;
 class Battleground;
 class PlayerbotAI;
-struct Position;
 
 #define SPELL_CAPTURE_BANNER 21651
 
