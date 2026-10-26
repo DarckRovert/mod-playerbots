@@ -1848,7 +1848,12 @@ bool FleeAction::isUseful()
         return false;
 
     Unit* target = AI_VALUE(Unit*, "current target");
-    if (target && target->IsInWorld() && !bot->IsWithinMeleeRange(target))
+    if (!target || !target->IsInWorld())
+        return false;
+
+    // Project Jaina Hito #257: For ranged casters, flee is useful until reaching safe kiting distance
+    float safeDistance = botAI->IsRanged(bot) ? std::min(sPlayerbotAIConfig.fleeDistance, 20.0f) : sPlayerbotAIConfig.meleeDistance;
+    if (bot->GetDistance(target) >= safeDistance)
         return false;
 
     return true;

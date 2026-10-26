@@ -138,7 +138,8 @@ bool AttackAction::Attack(Unit* target, bool /*with_pet*/ /*true*/)
         return false;
 
     Unit* oldTarget = context->GetValue<Unit*>("current target")->Get();
-    bool shouldMelee = bot->IsWithinMeleeRange(target) || botAI->IsMelee(bot);
+    // Project Jaina Hito #257: Casters and ranged classes must NEVER auto-attack in melee merely due to proximity!
+    bool shouldMelee = botAI->IsMelee(bot);
 
     bool sameTarget = oldTarget == target && bot->GetVictim() == target;
     bool inCombat = botAI->GetState() == BOT_STATE_COMBAT;

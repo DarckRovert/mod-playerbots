@@ -631,11 +631,19 @@ bool EmoteActionBase::ReceiveEmote(Player* source, uint32 emote, bool verbal)
 
     if (textEmote)
     {
-        WorldPacket data(SMSG_TEXT_EMOTE);
-        data << textEmote;
-        data << GetNumberOfEmoteVariants((TextEmotes)textEmote, bot->getRace(), bot->getGender());
-        data << ((source && urand(0, 1)) ? source->GetGUID() : ObjectGuid::Empty);
-        bot->GetSession()->HandleTextEmoteOpcode(data);
+        // Project Jaina Hito #257: Only send SMSG_TEXT_EMOTE if reacting to a real player, never spam
+        if (source && !GET_PLAYERBOT_AI(source))
+        {
+            WorldPacket data(SMSG_TEXT_EMOTE);
+            data << textEmote;
+            data << GetNumberOfEmoteVariants((TextEmotes)textEmote, bot->getRace(), bot->getGender());
+            data << source->GetGUID();
+            bot->GetSession()->HandleTextEmoteOpcode(data);
+        }
+        else if (emoteId)
+        {
+            bot->HandleEmoteCommand(emoteId);
+        }
     }
     else
     {
@@ -667,8 +675,11 @@ bool EmoteAction::Execute(Event event)
             p >> nam;
 
         pSource = ObjectAccessor::FindPlayer(source);
-        if (pSource && (pSource->GetGUID() != bot->GetGUID()) &&
-            ((urand(0, 1) && bot->HasInArc(static_cast<float>(M_PI), pSource, 10.0f)) ||
+        // Project Jaina Hito #257: Never react to emotes from other bots (avoids cascade storm)
+        if (!pSource || GET_PLAYERBOT_AI(pSource) || pSource == bot)
+            return false;
+
+        if (((urand(0, 1) && bot->HasInArc(static_cast<float>(M_PI), pSource, 10.0f)) ||
              (namlen > 1 && strstri(bot->GetName().c_str(), nam.c_str()))))
         {
             /*LOG_INFO("playerbots", "Bot {} {}:{} <{}> received SMSG_TEXT_EMOTE {} from player {} <{}>",
@@ -688,12 +699,15 @@ bool EmoteAction::Execute(Event event)
         p >> emoteId >> source;
 
         pSource = ObjectAccessor::FindPlayer(source);
-        if (pSource && pSource != bot && ServerFacade::instance().GetDistance2d(bot, pSource) < sPlayerbotAIConfig.farDistance &&
+        // Project Jaina Hito #257: Never react to emotes from other bots (avoids cascade storm)
+        if (!pSource || GET_PLAYERBOT_AI(pSource) || pSource == bot)
+            return false;
+
+        if (ServerFacade::instance().GetDistance2d(bot, pSource) < sPlayerbotAIConfig.farDistance &&
             emoteId != EMOTE_ONESHOT_NONE)
         {
-            if ((pSource->GetGUID() != bot->GetGUID()) &&
-                (pSource->GetTarget() == bot->GetGUID() ||
-                 (urand(0, 1) && bot->HasInArc(static_cast<float>(M_PI), pSource, 10.0f))))
+            if (pSource->GetTarget() == bot->GetGUID() ||
+                (urand(0, 1) && bot->HasInArc(static_cast<float>(M_PI), pSource, 10.0f)))
             {
                 /*LOG_INFO("playerbots", "Bot {} {}:{} <{}> received SMSG_EMOTE {} from player {} <{}>",
                     bot->GetGUID().ToString().c_str(), bot->GetTeamId() == TEAM_ALLIANCE ? "A" : "H", bot->GetLevel(),
@@ -806,7 +820,8 @@ bool TalkAction::Execute(Event /*event*/)
                 playerBotAI->GetAiObjectContext()->GetValue<ObjectGuid>("talk target")->Set(bot->GetGUID());
 
         context->GetValue<ObjectGuid>("talk target")->Set(target->GetGUID());
-        return Emote(target, GetRandomEmote(target, true), true);
+        // Project Jaina Hito #257: Visual emote gesture only, no raw DBC text emote spam in chat
+        return Emote(target, GetRandomEmote(target, false), false);
     }
 
     return false;

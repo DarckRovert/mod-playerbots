@@ -14,40 +14,12 @@
 bool EnemyTooCloseForSpellTrigger::IsActive()
 {
     Unit* target = AI_VALUE(Unit*, "current target");
-    return target && (target->GetVictim() != bot || target->isFrozen() || target->HasRootAura()) &&
-           target->GetObjectSize() <= 10.0f && target->IsWithinCombatRange(bot, MIN_MELEE_REACH);
-    //     Unit* target = AI_VALUE(Unit*, "current target");
-    //     if (!target)
-    //     {
-    //         return false;
-    //     }
+    if (!target)
+        return false;
 
-    //     if (target->GetTarget() == bot->GetGUID() && !bot->GetGroup() && !target->HasUnitState(UNIT_STATE_ROOT) &&
-    //     GetSpeedInMotion(target) > GetSpeedInMotion(bot) * 0.65f)
-    //         return false;
-
-    //     bool isBoss = false;
-    //     bool isRaid = false;
-    //     float combatReach = bot->GetCombatReach() + target->GetCombatReach();
-    //     float targetDistance = ServerFacade::instance().GetDistance2d(bot, target) + combatReach;
-    //     if (target->IsCreature())
-    //     {
-    //         Creature* creature = botAI->GetCreature(target->GetGUID());
-    //             if (creature)
-    //             {
-    //                 isBoss = creature->isWorldBoss();
-    //             }
-    //     }
-
-    //     if (bot->GetMap() && bot->GetMap()->IsRaid())
-    //         isRaid = true;
-
-    // //    if (isBoss || isRaid)
-    // //        return ServerFacade::instance().IsDistanceLessThan(targetDistance, (sPlayerbotAIConfig.tooCloseDistance +
-    // combatReach) / 2);
-
-    //     return ServerFacade::instance().IsDistanceLessOrEqualThan(targetDistance, (sPlayerbotAIConfig.tooCloseDistance +
-    //     combatReach / 2));
+    // Project Jaina Hito #257: In PvP or 1v1, casters must actively trigger retreat/flee if an enemy approaches
+    bool isPvpOrAggro = target->IsPlayer() || target->GetVictim() != bot || target->isFrozen() || target->HasRootAura();
+    return isPvpOrAggro && target->GetObjectSize() <= 10.0f && target->IsWithinCombatRange(bot, sPlayerbotAIConfig.tooCloseDistance);
 }
 
 bool EnemyTooCloseForAutoShotTrigger::IsActive()

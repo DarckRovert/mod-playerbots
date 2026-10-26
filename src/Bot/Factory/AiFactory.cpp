@@ -384,7 +384,7 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             if (tab == WARLOCK_TAB_AFFLICTION)
                 engine->addStrategiesNoInit("affli", "curse of agony", nullptr);
             else if (tab == WARLOCK_TAB_DEMONOLOGY)
-                engine->addStrategiesNoInit("demo", "curse of agony", "meta melee", nullptr);
+                engine->addStrategiesNoInit("demo", "curse of agony", nullptr);
             else // if (tab == WARLOCK_TAB_DESTRUCTION)
                 engine->addStrategiesNoInit("destro", "curse of elements", nullptr);
 
@@ -405,6 +405,10 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
 
     if (PlayerbotAI::IsMelee(player, true) && PlayerbotAI::IsDps(player, true))
         engine->addStrategy("behind", false);
+
+    // Project Jaina Hito #257: Auto-add "flee" kiting strategy to ranged/caster DPS and healers
+    if (PlayerbotAI::IsRanged(player, true))
+        engine->addStrategy("flee", false);
 
     if (PlayerbotAI::IsHeal(player, true))
     {
