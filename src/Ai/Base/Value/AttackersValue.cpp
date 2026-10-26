@@ -6,6 +6,7 @@
 
 #include "AttackersValue.h"
 #include "CellImpl.h"
+#include "CombatManager.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Playerbots.h"
@@ -115,9 +116,33 @@ void AttackersValue::AddAttackersOf(Player* player, std::unordered_set<Unit*>& t
     if (!player || !player->IsInWorld() || player->IsBeingTeleported())
         return;
 
+    // 1. PvE: Threat list of creatures threatening this player
     for (auto const& [guid, ref] : player->GetThreatMgr().GetThreatenedByMeList())
     {
         Unit* attacker = ref->GetOwner();
+        if (!attacker)
+            continue;
+
+        if (player->IsValidAttackTarget(attacker) &&
+            player->GetDistance2d(attacker) < sPlayerbotAIConfig.sightDistance)
+            targets.insert(attacker);
+    }
+
+    // 2. PvP & Physical: Direct attackers engaging this player (Unit::m_attackers)
+    for (Unit* attacker : player->getAttackers())
+    {
+        if (!attacker)
+            continue;
+
+        if (player->IsValidAttackTarget(attacker) &&
+            player->GetDistance2d(attacker) < sPlayerbotAIConfig.sightDistance)
+            targets.insert(attacker);
+    }
+
+    // 3. PvP & Magical: Ranged/caster combat references in PvP (CombatManager::_pvpRefs)
+    for (auto const& [guid, combatRef] : player->GetCombatManager().GetPvPCombatRefs())
+    {
+        Unit* attacker = combatRef ? combatRef->GetOther(player) : nullptr;
         if (!attacker)
             continue;
 

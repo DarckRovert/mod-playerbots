@@ -61,7 +61,7 @@ bool SamePlace(WorldObject const* a, WorldObject const* b)
 
 bool PartyOfFive(Player* bot, Group* group)
 {
-    return group && !bot->InBattleground() && group->GetMembersCount() <= 5;
+    return group && !bot->InBattleground() && group->GetMembersCount() <= 25;
 }
 
 Player* FindGroupTank(PlayerbotAI* botAI, Player* bot, Unit* target)

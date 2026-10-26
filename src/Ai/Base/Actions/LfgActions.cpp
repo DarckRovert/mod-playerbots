@@ -210,7 +210,6 @@ bool LfgAcceptAction::Execute(Event event)
         if (bot->IsInCombat())
         {
             bot->CombatStop(true);
-            bot->ClearUnitState(UNIT_STATE_IN_COMBAT);
         }
 
         botAI->GetAiObjectContext()->GetValue<uint32>("lfg proposal")->Set(0);
@@ -250,7 +249,6 @@ bool LfgAcceptAction::Execute(Event event)
             if (bot->IsInCombat())
             {
                 bot->CombatStop(true);
-                bot->ClearUnitState(UNIT_STATE_IN_COMBAT);
             }
 
             botAI->GetAiObjectContext()->GetValue<uint32>("lfg proposal")->Set(0);
