@@ -2573,9 +2573,9 @@ AiPlayerbot.CommandSeparator = "\\\\"
 # Default: 1 (enabled)
 AiPlayerbot.EnableAutoTradeOnItemMention = 1
 
-# Enable bots talking (say / yell / general chatting / lfg)
-AiPlayerbot.RandomBotTalk = 1
-# Enable bots emoting
+# Enable bots talking (say / yell / general chatting / lfg - Eradicated in Hito #257; handled by mod-llm-chatter)
+AiPlayerbot.RandomBotTalk = 0
+# Enable bots emoting (Eradicated raw text emote cascades in Hito #257)
 AiPlayerbot.RandomBotEmote = 0
 # Enable randombots suggesting dungeons in chat
 AiPlayerbot.RandomBotSuggestDungeons = 1
