@@ -132,13 +132,30 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
     bool sameGuild = sPlayerbotAIConfig.allowGuildBots && guild && guild->GetMember(playerGuid);
     bool addClassBot = sRandomPlayerbotMgr.IsAddclassBot(playerGuid.GetCounter());
     bool linkedAccount = sPlayerbotAIConfig.allowTrustedAccountBots && IsAccountLinked(accountId, masterAccountId);
-    bool isHeroBot = (accountId == 102); // RNDBOT_HERO_JAINA (HeroBot especial)
+
+    // Deteccion canonica de cuentas bot del ecosistema (HeroBots, Escuadron Elite y RandomBots)
+    std::string accountName;
+    bool isBotAccount = false;
+    if (AccountMgr::GetName(accountId, accountName))
+    {
+        std::string lowerAcc = accountName;
+        std::transform(lowerAcc.begin(), lowerAcc.end(), lowerAcc.begin(), ::tolower);
+        std::string lowerPrefix = sPlayerbotAIConfig.randomBotAccountPrefix;
+        std::transform(lowerPrefix.begin(), lowerPrefix.end(), lowerPrefix.begin(), ::tolower);
+        if (!lowerPrefix.empty() && lowerAcc.rfind(lowerPrefix, 0) == 0)
+        {
+            isBotAccount = true;
+        }
+    }
+    bool isRandomBotAccount = sPlayerbotAIConfig.IsInRandomAccountList(accountId);
+    bool isHeroOrCompanion = isBotAccount || isRandomBotAccount || (accountId == 102);
+    bool isGm = masterPlayer && masterPlayer->CanBeGameMaster();
 
     bool allowed = true;
     std::ostringstream out;
     std::string botName;
     sCharacterCache->GetCharacterNameByGuid(playerGuid, botName);
-    if (!isRndbot && !sameAccount && !sameGuild && !addClassBot && !linkedAccount && !isHeroBot)
+    if (!isRndbot && !isGm && !sameAccount && !sameGuild && !addClassBot && !linkedAccount && !isHeroOrCompanion)
     {
         allowed = false;
         out << "Failure: You are not allowed to control bot " << botName.c_str();
