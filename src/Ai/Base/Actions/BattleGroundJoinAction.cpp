@@ -901,7 +901,7 @@ bool BGStatusAction::Execute(Event event)
                              isArena ? "Arena" : "BG", _bgType);
                     WorldPacket emptyPacket;
                     bot->GetSession()->HandleCancelMountAuraOpcode(emptyPacket);
-                    action = 0x1;
+                    action = (bg && bot->GetLevel() > bg->GetMaxLevel()) ? 0 : 0x1;
 
                     WorldPacket packet(CMSG_BATTLEFIELD_PORT, 20);
                     packet << type << unk2 << (uint32)_bgTypeId << unk << action;
@@ -1023,7 +1023,7 @@ bool BGStatusAction::Execute(Event event)
         WorldPacket emptyPacket;
         bot->GetSession()->HandleCancelMountAuraOpcode(emptyPacket);
 
-        action = 0x1;
+        action = (bg && bot->GetLevel() > bg->GetMaxLevel()) ? 0 : 0x1;
 
         WorldPacket packet(CMSG_BATTLEFIELD_PORT, 20);
         packet << type << unk2 << (uint32)_bgTypeId << unk << action;
