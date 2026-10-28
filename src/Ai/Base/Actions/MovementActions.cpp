@@ -1882,8 +1882,9 @@ bool AvoidAoeAction::HasHostileDynamicObjectDanger()
     if (!sPlayerbotAIConfig.enableSpatialDangerAvoidance)
         return false;
 
+    float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
     std::list<WorldObject*> objs;
-    float scanRadius = 15.0f;
+    float scanRadius = maxAvoidRadius + 2.0f;
     Acore::AllWorldObjectsInRange check(bot, scanRadius);
     Acore::WorldObjectListSearcher<Acore::AllWorldObjectsInRange> searcher(
         bot, objs, check, GRID_MAP_TYPE_MASK_DYNAMICOBJECT);
@@ -1911,8 +1912,10 @@ bool AvoidAoeAction::HasHostileDynamicObjectDanger()
             continue;
 
         float radius = dynObj->GetRadius();
-        if (radius <= 0.0f || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
+        if (radius <= 0.0f)
             radius = 8.0f;
+        if (radius > maxAvoidRadius)
+            continue;
 
         if (bot->GetDistance(dynObj) <= radius + 1.0f)
             return true;
@@ -1925,8 +1928,9 @@ bool AvoidAoeAction::AvoidHostileDynamicObjects()
     if (!sPlayerbotAIConfig.enableSpatialDangerAvoidance)
         return false;
 
+    float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
     std::list<WorldObject*> objs;
-    float scanRadius = 15.0f;
+    float scanRadius = maxAvoidRadius + 2.0f;
     Acore::AllWorldObjectsInRange check(bot, scanRadius);
     Acore::WorldObjectListSearcher<Acore::AllWorldObjectsInRange> searcher(
         bot, objs, check, GRID_MAP_TYPE_MASK_DYNAMICOBJECT);
@@ -1954,8 +1958,10 @@ bool AvoidAoeAction::AvoidHostileDynamicObjects()
             continue;
 
         float radius = dynObj->GetRadius();
-        if (radius <= 0.0f || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
+        if (radius <= 0.0f)
             radius = 8.0f;
+        if (radius > maxAvoidRadius)
+            continue;
 
         if (bot->GetDistance(dynObj) <= radius + 1.0f)
         {
@@ -2034,8 +2040,11 @@ bool AvoidAoeAction::AvoidAuraWithDynamicObj()
     {
         return false;
     }
+    float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
     float radius = dynOwner->GetRadius();
-    if (!radius || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
+    if (radius <= 0.0f)
+        radius = 8.0f;
+    if (radius > maxAvoidRadius)
         return false;
     if (bot->GetDistance(dynOwner) > radius)
     {
@@ -2101,8 +2110,11 @@ bool AvoidAoeAction::AvoidGameObjectWithDamage()
             continue;
         }
 
+        float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
         float radius = (float)goInfo->trap.diameter / 2 + go->GetCombatReach();
-        if (!radius || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
+        if (radius <= 0.0f)
+            radius = 8.0f;
+        if (radius > maxAvoidRadius)
             continue;
 
         if (bot->GetDistance(go) > radius)
@@ -2169,13 +2181,16 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
                 {
                     if (triggerSpellInfo->Effects[j].Effect == SPELL_EFFECT_SCHOOL_DAMAGE)
                     {
+                        float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
                         float radius = triggerSpellInfo->Effects[j].CalcRadius();
+                        if (radius <= 0.0f)
+                            radius = 8.0f;
+                        if (radius > maxAvoidRadius)
+                            continue;
                         if (bot->GetDistance(unit) > radius)
                         {
                             break;
                         }
-                        if (!radius || radius > sPlayerbotAIConfig.maxAoeAvoidRadius)
-                            continue;
                         std::ostringstream name;
                         name << triggerSpellInfo->SpellName[LOCALE_enUS];  //<< "] (unit)";
                         if (FleePosition(unit->GetPosition(), radius))
@@ -2236,7 +2251,7 @@ Position MovementAction::BestPositionForMeleeToFlee(Position pos, float radius)
             continue;
         }
         bool strict = checkAngle.strict;
-        float fleeDis = std::min(radius + 1.0f, sPlayerbotAIConfig.fleeDistance);
+        float fleeDis = std::max(radius + 2.5f, sPlayerbotAIConfig.fleeDistance);
         float dx = bot->GetPositionX() + cos(angle) * fleeDis;
         float dy = bot->GetPositionY() + sin(angle) * fleeDis;
         float dz = bot->GetPositionZ();
@@ -2299,7 +2314,7 @@ Position MovementAction::BestPositionForRangedToFlee(Position pos, float radius)
             continue;
         }
         bool strict = checkAngle.strict;
-        float fleeDis = std::min(radius + 1.0f, sPlayerbotAIConfig.fleeDistance);
+        float fleeDis = std::max(radius + 2.5f, sPlayerbotAIConfig.fleeDistance);
         float dx = bot->GetPositionX() + cos(angle) * fleeDis;
         float dy = bot->GetPositionY() + sin(angle) * fleeDis;
         float dz = bot->GetPositionZ();

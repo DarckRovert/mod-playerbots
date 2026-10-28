@@ -6,14 +6,172 @@
 
 #include "ReviveFromCorpseAction.h"
 #include "Corpse.h"
+#include "DBCStores.h"
 #include "Event.h"
 #include "FleeManager.h"
 #include "GameGraveyard.h"
+#include "Group.h"
 #include "MapMgr.h"
+#include "ObjectMgr.h"
 #include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
 #include "RandomPlayerbotMgr.h"
 #include "ServerFacade.h"
+
+namespace
+{
+    bool IsDungeonOrRaidMap(uint32 mapId)
+    {
+        if (mapId == uint32(-1))
+            return false;
+
+        MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
+        return mapEntry && (mapEntry->IsDungeon() || mapEntry->IsRaid());
+    }
+
+    bool GetHumanDungeonGroupContext(Player* bot, PlayerbotAI* botAI, Corpse* corpse, uint32& outInstanceMapId,
+                                     Player*& outLivingInsideAnchor, bool& outGroupInCombat)
+    {
+        outInstanceMapId = uint32(-1);
+        outLivingInsideAnchor = nullptr;
+        outGroupInCombat = false;
+
+        Group* group = bot->GetGroup();
+        if (!group)
+            return false;
+
+        bool hasHumanMember = false;
+        Player* firstHumanInInstance = nullptr;
+
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (!member || !member->IsInWorld())
+                continue;
+
+            if (member->IsAlive() && member->IsInCombat())
+                outGroupInCombat = true;
+
+            if (member->GetSession() && !member->GetSession()->GetRemoteAddress().empty())
+            {
+                hasHumanMember = true;
+                if (!firstHumanInInstance && IsDungeonOrRaidMap(member->GetMapId()))
+                    firstHumanInInstance = member;
+            }
+        }
+
+        if (!hasHumanMember)
+            return false;
+
+        if (corpse && IsDungeonOrRaidMap(corpse->GetMapId()))
+            outInstanceMapId = corpse->GetMapId();
+        else if (IsDungeonOrRaidMap(bot->GetCorpseLocation().GetMapId()))
+            outInstanceMapId = bot->GetCorpseLocation().GetMapId();
+        else if (Player* master = botAI->GetMaster(); master && master->IsInWorld() && IsDungeonOrRaidMap(master->GetMapId()))
+            outInstanceMapId = master->GetMapId();
+        else if (firstHumanInInstance)
+            outInstanceMapId = firstHumanInInstance->GetMapId();
+
+        if (outInstanceMapId == uint32(-1))
+            return false;
+
+        if (Player* master = botAI->GetMaster();
+            master && master != bot && master->IsInWorld() && master->IsAlive() && master->GetMapId() == outInstanceMapId)
+        {
+            outLivingInsideAnchor = master;
+        }
+        else
+        {
+            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+            {
+                Player* member = gref->GetSource();
+                if (!member || member == bot || !member->IsInWorld() || !member->IsAlive() ||
+                    member->GetMapId() != outInstanceMapId)
+                    continue;
+
+                if (member->GetSession() && !member->GetSession()->GetRemoteAddress().empty())
+                {
+                    outLivingInsideAnchor = member;
+                    break;
+                }
+
+                if (!outLivingInsideAnchor)
+                    outLivingInsideAnchor = member;
+            }
+        }
+
+        return true;
+    }
+
+    bool ReviveBotCleanlyInDungeon(Player* bot, PlayerbotAI* /*botAI*/, AiObjectContext* context, Corpse* corpse,
+                                   uint32 instanceMapId, Player* livingInsideAnchor, bool groupInCombat)
+    {
+        // Hold ghost state while wipe/encounter is still in progress if nobody is alive inside the instance yet
+        if (groupInCombat && !livingInsideAnchor)
+            return true;
+
+        uint32 destMapId = instanceMapId;
+        float destX = 0.0f;
+        float destY = 0.0f;
+        float destZ = 0.0f;
+        float destO = bot->GetOrientation();
+        bool hasValidDest = false;
+
+        // Out of combat with a living master/human inside the dungeon: reunite cleanly near them.
+        // Otherwise (full wipe recovery or master still engaged), enter cleanly at the dungeon portal entrance.
+        if (!groupInCombat && livingInsideAnchor)
+        {
+            destMapId = livingInsideAnchor->GetMapId();
+            destX = livingInsideAnchor->GetPositionX();
+            destY = livingInsideAnchor->GetPositionY();
+            destZ = livingInsideAnchor->GetPositionZ();
+            destO = livingInsideAnchor->GetOrientation();
+            hasValidDest = true;
+        }
+        else if (AreaTriggerTeleport const* entrance = sObjectMgr->GetMapEntranceTrigger(instanceMapId))
+        {
+            destMapId = entrance->target_mapId;
+            destX = entrance->target_X;
+            destY = entrance->target_Y;
+            destZ = entrance->target_Z;
+            destO = entrance->target_Orientation;
+            hasValidDest = true;
+        }
+        else if (livingInsideAnchor)
+        {
+            destMapId = livingInsideAnchor->GetMapId();
+            destX = livingInsideAnchor->GetPositionX();
+            destY = livingInsideAnchor->GetPositionY();
+            destZ = livingInsideAnchor->GetPositionZ();
+            destO = livingInsideAnchor->GetOrientation();
+            hasValidDest = true;
+        }
+        else if (corpse && corpse->GetMapId() == instanceMapId)
+        {
+            destMapId = corpse->GetMapId();
+            destX = corpse->GetPositionX();
+            destY = corpse->GetPositionY();
+            destZ = corpse->GetPositionZ();
+            destO = corpse->GetOrientation();
+            hasValidDest = true;
+        }
+
+        if (!hasValidDest)
+            return false;
+
+        bot->GetMotionMaster()->Clear();
+        bot->StopMoving();
+        bot->ResurrectPlayer(0.5f, false);
+        bot->RemoveAurasDueToSpell(15007); // Guarantee zero Resurrection Sickness
+        bot->SpawnCorpseBones();
+        context->GetValue<Unit*>("current target")->Set(nullptr);
+        context->GetValue<GuidVector>("prioritized targets")->Reset();
+        context->GetValue<uint32>("death count")->Set(0);
+        bot->SetTarget();
+        bot->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED | AURA_INTERRUPT_FLAG_CHANGE_MAP);
+        return bot->TeleportTo(destMapId, destX, destY, destZ, destO);
+    }
+} // namespace
 
 bool ReviveFromCorpseAction::Execute(Event event)
 {
@@ -55,7 +213,13 @@ bool ReviveFromCorpseAction::Execute(Event event)
             return false;
     }
 
-    if (!botAI->HasGameClientMaster())
+    uint32 dungeonMapId = uint32(-1);
+    Player* livingInsideAnchor = nullptr;
+    bool groupInCombat = false;
+    bool const inHumanDungeonGroup =
+        GetHumanDungeonGroupContext(bot, botAI, corpse, dungeonMapId, livingInsideAnchor, groupInCombat);
+
+    if (!botAI->HasGameClientMaster() && !inHumanDungeonGroup)
     {
         uint32 dCount = AI_VALUE(uint32, "death count");
 
@@ -95,7 +259,13 @@ bool FindCorpseAction::Execute(Event /*event*/)
 
     uint32 dCount = AI_VALUE(uint32, "death count");
 
-    if (!botAI->HasGameClientMaster())
+    uint32 dungeonMapId = uint32(-1);
+    Player* livingInsideAnchor = nullptr;
+    bool groupInCombat = false;
+    bool const inHumanDungeonGroup =
+        GetHumanDungeonGroupContext(bot, botAI, corpse, dungeonMapId, livingInsideAnchor, groupInCombat);
+
+    if (!botAI->HasGameClientMaster() && !inHumanDungeonGroup)
     {
         if (dCount >= 5)
         {
@@ -183,7 +353,7 @@ bool FindCorpseAction::Execute(Event /*event*/)
             moved = true;
         else
         {
-            if (deadTime < 10 * MINUTE && dCount < 5)  // Look for corpse up to 30 minutes.
+            if (deadTime < 10 * MINUTE && (dCount < 5 || inHumanDungeonGroup))  // Look for corpse up to 30 minutes.
             {
                 moved =
                     MoveTo(moveToPos.GetMapId(), moveToPos.GetPositionX(), moveToPos.GetPositionY(), moveToPos.GetPositionZ(), false, false);
@@ -191,7 +361,15 @@ bool FindCorpseAction::Execute(Event /*event*/)
 
             if (!moved)
             {
-                moved = botAI->DoSpecificAction("spirit healer", Event(), true);
+                if (inHumanDungeonGroup)
+                {
+                    moved = ReviveBotCleanlyInDungeon(bot, botAI, context, corpse, dungeonMapId, livingInsideAnchor,
+                                                      groupInCombat);
+                }
+                else
+                {
+                    moved = botAI->DoSpecificAction("spirit healer", Event(), true);
+                }
             }
         }
     }
@@ -306,6 +484,14 @@ bool SpiritHealerAction::Execute(Event /*event*/)
     {
         botAI->TellError("I am not a spirit");
         return false;
+    }
+
+    uint32 dungeonMapId = uint32(-1);
+    Player* livingInsideAnchor = nullptr;
+    bool groupInCombat = false;
+    if (GetHumanDungeonGroupContext(bot, botAI, corpse, dungeonMapId, livingInsideAnchor, groupInCombat))
+    {
+        return ReviveBotCleanlyInDungeon(bot, botAI, context, corpse, dungeonMapId, livingInsideAnchor, groupInCombat);
     }
 
     uint32 dCount = AI_VALUE(uint32, "death count");

@@ -4366,20 +4366,18 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string const sp
                 if (remaining < 50)
                     return false;
 
-                // Group-coordinated staggered interrupt window to prevent simultaneous duplicate kicks
-                if (Group* group = bot->GetGroup())
+                // Fast casts (<= 1600ms): interrupt immediately once human reaction floor is met.
+                // Normal/long casts (> 1600ms): soft group-coordinated stagger up to 95% of cast,
+                // never cutting off slot 0 prematurely at 65% when lone interruptor or backup is on GCD.
+                if (totalCastTime > 1600)
                 {
-                    uint32 botSlot = (bot->GetGUID().GetCounter()) % 2;
-                    if (botSlot == 1)
+                    if (elapsed > (totalCastTime * 95 / 100))
+                        return false;
+
+                    if (bot->GetGroup())
                     {
-                        // Backup interruptor waits until 60% of cast has elapsed
-                        if (elapsed < (totalCastTime * 60 / 100))
-                            return false;
-                    }
-                    else
-                    {
-                        // Primary interruptor attempts between reaction delay and 65% of cast
-                        if (elapsed > (totalCastTime * 65 / 100))
+                        uint32 botSlot = (bot->GetGUID().GetCounter()) % 2;
+                        if (botSlot == 1 && elapsed < (totalCastTime * 45 / 100) && remaining >= 600)
                             return false;
                     }
                 }

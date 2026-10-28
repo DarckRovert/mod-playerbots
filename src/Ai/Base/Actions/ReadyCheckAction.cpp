@@ -11,12 +11,25 @@
 #include <mutex>
 #include <vector>
 
-static void SendReadyConfirm(Player* bot)
+static void SendReadyConfirm(Player* bot, uint8 ready = 1)
 {
-    WorldPacket packet(MSG_RAID_READY_CHECK);
-    packet << bot->GetGUID();
-    packet << uint8(1);
+    WorldPacket packet(MSG_RAID_READY_CHECK, 1);
+    packet << ready;
     bot->GetSession()->HandleRaidReadyCheckOpcode(packet);
+}
+
+static bool ShouldReplyNotReadyForLowMana(Player* bot, AiObjectContext* context)
+{
+    if (!bot || bot->IsInCombat())
+        return false;
+
+    if (!AI_VALUE2(bool, "has mana", "self target"))
+        return false;
+
+    if (!PlayerbotAI::IsHeal(bot) && !PlayerbotAI::IsCaster(bot))
+        return false;
+
+    return AI_VALUE2(uint8, "mana", "self target") < 35;
 }
 
 std::string const formatPercent(std::string const name, uint8 value, float percent)
@@ -103,21 +116,25 @@ public:
         Player* bot = botAI->GetBot();
         if (bot->getClass() == CLASS_HUNTER)
         {
+            bool const reveal = botAI->HasStrategy("reveal", BOT_STATE_NON_COMBAT);
             if (!bot->GetUInt32Value(PLAYER_AMMO_ID))
             {
-                botAI->TellError("Out of ammo!");
+                if (reveal)
+                    botAI->TellError("Out of ammo!");
                 return false;
             }
 
             if (!bot->GetPet())
             {
-                botAI->TellError("No pet!");
+                if (reveal)
+                    botAI->TellError("No pet!");
                 return false;
             }
 
             if (bot->GetPet()->GetHappinessState() == UNHAPPY)
             {
-                botAI->TellError("Pet is unhappy!");
+                if (reveal)
+                    botAI->TellError("Pet is unhappy!");
                 return false;
             }
         }
@@ -168,6 +185,16 @@ bool ReadyCheckAction::Execute(Event event)
         if (player == bot->GetGUID())
             return false;
 
+        if (ShouldReplyNotReadyForLowMana(bot, context))
+        {
+            ReportReadinessToMaster();
+            SendReadyConfirm(bot, 0);
+            botAI->forceRebuff.End();
+            botAI->ChangeStrategy("-ready check", BOT_STATE_NON_COMBAT);
+            botAI->DoSpecificAction("drink", Event(), true);
+            return true;
+        }
+
         // Defer the ready reply until buffs are topped off.
         if (sPlayerbotAIConfig.forceRebuffOnReadyCheck && !bot->IsInCombat() &&
             botAI->HasStrategy("force rebuff", BOT_STATE_NON_COMBAT))
@@ -183,6 +210,9 @@ bool ReadyCheckAction::Execute(Event event)
 
 void ReadyCheckAction::ReportReadinessToMaster()
 {
+    if (!botAI->HasStrategy("reveal", BOT_STATE_NON_COMBAT))
+        return;
+
     std::call_once(
         ReadyChecker::initFlag,
         []()
@@ -237,7 +267,16 @@ bool ReadyCheckAction::ReadyCheck()
 {
     ReportReadinessToMaster();
 
-    SendReadyConfirm(bot);
+    if (ShouldReplyNotReadyForLowMana(bot, context))
+    {
+        SendReadyConfirm(bot, 0);
+        botAI->forceRebuff.End();
+        botAI->ChangeStrategy("-ready check", BOT_STATE_NON_COMBAT);
+        botAI->DoSpecificAction("drink", Event(), true);
+        return true;
+    }
+
+    SendReadyConfirm(bot, 1);
 
     botAI->forceRebuff.End();
 
@@ -269,7 +308,16 @@ bool ReadyReplyAction::isUseful()
 bool ReadyReplyAction::Execute(Event /*event*/)
 {
     if (botAI->forceRebuff.ShouldReplyToReadyCheck())
-        SendReadyConfirm(bot);
+    {
+        if (ShouldReplyNotReadyForLowMana(bot, context))
+        {
+            SendReadyConfirm(bot, 0);
+            botAI->forceRebuff.End();
+            botAI->DoSpecificAction("drink", Event(), true);
+            return true;
+        }
+        SendReadyConfirm(bot, 1);
+    }
 
     botAI->forceRebuff.End();
     return true;

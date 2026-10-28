@@ -8,3 +8,9 @@
 target_link_libraries(modules
   PRIVATE
     mysql)
+
+if (";${MODULE_LIST__};" MATCHES ";mod-playerbots;")
+  target_compile_definitions(modules
+    PUBLIC
+      MOD_PLAYERBOTS)
+endif()

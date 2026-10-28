@@ -70,13 +70,29 @@ uint8 ThreatValue::Calculate(Unit* target)
     bool fleeing = target->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLEEING_MOTION_TYPE ||
                    target->GetMotionMaster()->GetCurrentMovementGeneratorType() == TIMED_FLEEING_MOTION_TYPE;
 
-    // return high threat if tank has no threat
-    if (target->IsInCombat() && maxThreat <= 0 && botThreat <= 0 && hasTank && !fleeing)
-        return 100;
-
-    // return low threat if mob if fleeing
+    // return low threat if mob is fleeing
     if (hasTank && fleeing)
         return 0;
 
-    return botThreat * 100 / maxThreat;
+    // Prevent divide-by-zero / x86_64 CVTTSS2SI float-to-uint8 overflow (botThreat * 100 / 0.0f -> 0):
+    // When a tank exists in the group and holds <= 0 threat while this bot holds threat on an untanked add
+    // (or the target is actively in combat with 0 tank threat), report 100% threat immediately.
+    if (hasTank && maxThreat <= 0.0f)
+    {
+        if (botThreat > 0.0f || target->IsInCombat())
+            return 100;
+
+        return 0;
+    }
+
+    if (maxThreat <= 0.0f)
+        return 0;
+
+    float threatPct = (botThreat * 100.0f) / maxThreat;
+    if (threatPct >= 100.0f)
+        return 100;
+    if (threatPct <= 0.0f)
+        return 0;
+
+    return static_cast<uint8>(threatPct);
 }
