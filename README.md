@@ -22,6 +22,7 @@
 `mod-playerbots` is an advanced player simulation module for [JainaCore](https://github.com/DarckRovert/JainaCore) / [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a).
 
 ### ⚔️ Project Jaina Sovereign Innovations:
+- **Apex Mythic Raider PvE v4.0:** Continuous 30.0y AoE hazard escape vectoring in `MovementActions.cpp`, x86_64 zero-division arithmetic crash prevention in `ThreatValues.cpp`, human-calibrated casting interrupt timing window in `PlayerbotAI.cpp`, dungeon entrance respawn without Resurrection Sickness in `ReviveFromCorpseAction.cpp`, and silent packet-compliant ready check serialization in `ReadyCheckAction.cpp`.
 - **Multithread Concurrency Hardening:** Mutex locks (`queueLock`, `eventCacheLock`, `ItemCacheLock`) eliminating race conditions and heap corruption under high load.
 - **Tactical Formations & Positioning:** `GetBehindTankNearHealerLocation` and `BotIsInFrontOfLivingTank`. DPS bots strictly position behind tanks avoiding frontal cleaves and dragon breaths.
 - **Body-Pull & Leash Protection:** `IsBodyPullRisk` and `IsChaseLeashed` preventing accidental proximity aggro in tight dungeon corridors.
