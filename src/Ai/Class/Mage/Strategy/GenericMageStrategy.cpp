@@ -98,6 +98,7 @@ void GenericMageStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 
     // Defensive Triggers
     triggers.push_back(new TriggerNode("critical health", { NextAction("ice block", 90.0f) }));
+    triggers.push_back(new TriggerNode("being attacked", { NextAction("mana shield", 86.0f) }));
     triggers.push_back(new TriggerNode("low health", { NextAction("mana shield", 85.0f) }));
     triggers.push_back(new TriggerNode("fire ward", { NextAction("fire ward", 90.0f) }));
     triggers.push_back(new TriggerNode("frost ward", { NextAction("frost ward", 90.0f) }));

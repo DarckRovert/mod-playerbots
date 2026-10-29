@@ -76,7 +76,7 @@ UnholyDKStrategy::UnholyDKStrategy(PlayerbotAI* botAI) : GenericDKStrategy(botAI
 std::vector<NextAction> UnholyDKStrategy::getDefaultActions()
 {
     return {
-        NextAction("death and decay", ACTION_HIGH + 5),
+        NextAction("death and decay", ACTION_NORMAL + 5),
         NextAction("summon gargoyle", ACTION_DEFAULT + 0.4f),
         NextAction("horn of winter", ACTION_DEFAULT + 0.2f),
         NextAction("death coil", ACTION_DEFAULT + 0.1f),

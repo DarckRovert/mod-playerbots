@@ -68,9 +68,9 @@ void GenericDKStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         new TriggerNode("low health", { NextAction("icebound fortitude", ACTION_HIGH + 5),
                                                         NextAction("rune tap", ACTION_HIGH + 4) }));
     triggers.push_back(
-        new TriggerNode("medium aoe", { NextAction("death and decay", ACTION_HIGH + 9),
-                                                        NextAction("pestilence", ACTION_NORMAL + 4),
-                                                        NextAction("blood boil", ACTION_NORMAL + 3) }));
+        new TriggerNode("medium aoe", { NextAction("death and decay", ACTION_HIGH + 2),
+                                        NextAction("pestilence", ACTION_NORMAL + 4),
+                                        NextAction("blood boil", ACTION_NORMAL + 3) }));
     triggers.push_back(
         new TriggerNode("pestilence glyph", { NextAction("pestilence", ACTION_HIGH + 9) }));
     triggers.push_back(

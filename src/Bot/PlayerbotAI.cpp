@@ -287,9 +287,27 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 
     AllowActivity();
 
-    // Emergency Combat Interruption: If bot enters combat while in a long delay (e.g. eating/drinking),
-    // immediately clamp delay to reaction time and stand up so it never remains a helpless sitting target.
-    if (bot->IsInCombat())
+    // Emergency Combat Interruption: If bot or any nearby party member enters combat while in a long delay
+    // (e.g. eating/drinking/resting), immediately clamp delay to reaction time and stand up so the bot
+    // never remains a helpless sitting target or goes "AFK" while teammates fight for their lives.
+    bool groupInCombat = false;
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == bot || !member->IsAlive())
+                continue;
+
+            if (member->IsInCombat() && bot->GetExactDist2d(member) <= sPlayerbotAIConfig.sightDistance)
+            {
+                groupInCombat = true;
+                break;
+            }
+        }
+    }
+
+    if (bot->IsInCombat() || groupInCombat)
     {
         if (nextAICheckDelay > sPlayerbotAIConfig.reactDelay)
             nextAICheckDelay = sPlayerbotAIConfig.reactDelay;

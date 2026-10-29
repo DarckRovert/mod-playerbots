@@ -57,7 +57,9 @@ bool DrinkAction::Execute(Event event)
         float p = mp;
         float delay;
 
-        if (!bot->InBattleground())
+        if (AI_VALUE(Unit*, "party member to resurrect") != nullptr && p < 35.0f)
+            delay = 18.0f * IN_MILLISECONDS * (35.0f - p) / 100.0f;
+        else if (!bot->InBattleground())
             delay = 18.0f * IN_MILLISECONDS * (100 - p) / 100.0f;
         else
             delay = 12.0f * IN_MILLISECONDS * (100 - p) / 100.0f;
@@ -74,6 +76,13 @@ bool DrinkAction::Execute(Event event)
 
 bool DrinkAction::isUseful()
 {
+    if (AI_VALUE(Unit*, "party member to resurrect") != nullptr)
+    {
+        // Prioritize resurrection immediately if bot has enough mana (> 35%) to cast the spell
+        if (AI_VALUE2(uint8, "mana", "self target") >= 35)
+            return false;
+    }
+
     return UseItemAction::isUseful() && AI_VALUE2(bool, "has mana", "self target") &&
            AI_VALUE2(uint8, "mana", "self target") < 100;
 }

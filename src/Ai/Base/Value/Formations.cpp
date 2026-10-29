@@ -51,7 +51,8 @@ bool ValidateTargetContext(Unit* a, Unit* b)
 namespace
 {
 constexpr float TANK_NEAR_YARDS = 40.0f;
-constexpr float BEHIND_TANK_YARDS = 12.0f;
+constexpr float BEHIND_TANK_YARDS_MELEE = 10.0f;
+constexpr float BEHIND_TANK_YARDS_RANGED = 26.0f;
 
 bool SamePlace(WorldObject const* a, WorldObject const* b)
 {
@@ -131,8 +132,11 @@ bool GetBehindTankNearHealerLocation(PlayerbotAI* botAI, Player* bot, WorldLocat
     float awayY = 0.0f;
     AwayFromPull(tank, awayX, awayY);
 
-    float ax = tank->GetPositionX() + awayX * BEHIND_TANK_YARDS;
-    float ay = tank->GetPositionY() + awayY * BEHIND_TANK_YARDS;
+    bool isRangedOrHealer = botAI->IsHeal(bot) || PlayerbotAI::IsRanged(bot);
+    float behindDist = isRangedOrHealer ? BEHIND_TANK_YARDS_RANGED : BEHIND_TANK_YARDS_MELEE;
+
+    float ax = tank->GetPositionX() + awayX * behindDist;
+    float ay = tank->GetPositionY() + awayY * behindDist;
     float az = tank->GetPositionZ();
 
     Player* healer = nullptr;
@@ -152,14 +156,14 @@ bool GetBehindTankNearHealerLocation(PlayerbotAI* botAI, Player* bot, WorldLocat
 
     // Dot with the away-from-the-mob vector. Distance alone is true for a healer past the mob.
     bool healerBehind = false;
-    if (healer && healer != bot && tank->GetExactDist2d(healer) < 15.0f)
+    if (healer && healer != bot && tank->GetExactDist2d(healer) >= 15.0f && tank->GetExactDist2d(healer) <= 35.0f)
     {
         float hx = healer->GetPositionX() - tank->GetPositionX();
         float hy = healer->GetPositionY() - tank->GetPositionY();
-        healerBehind = hx * awayX + hy * awayY >= 2.0f;
+        healerBehind = hx * awayX + hy * awayY >= 5.0f;
     }
 
-    if (healerBehind)
+    if (healerBehind && isRangedOrHealer)
     {
         ax = healer->GetPositionX();
         ay = healer->GetPositionY();
@@ -181,7 +185,7 @@ bool GetBehindTankNearHealerLocation(PlayerbotAI* botAI, Player* bot, WorldLocat
 
         if (count > 1)
         {
-            float side = (static_cast<float>(index) - (count - 1) / 2.0f) * 2.2f;
+            float side = (static_cast<float>(index) - (count - 1) / 2.0f) * 3.5f;
             ax += -awayY * side;
             ay += awayX * side;
         }

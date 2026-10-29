@@ -22,6 +22,33 @@ float ThreatMultiplier::GetValue(Action* action)
     if (!AI_VALUE(bool, "group"))
         return 1.0f;
 
+    Player* bot = botAI->GetBot();
+    // Project Jaina Threat Lead Time: On newly engaged targets or fresh multi-mob pulls,
+    // prevent non-tank DPS from dropping immediate heavy AoE or massive nukes before the tank
+    // establishes baseline threat (preventing instant one-shots on casters and wiping on adds).
+    if (bot && !botAI->IsTank(bot))
+    {
+        Unit* target = AI_VALUE(Unit*, "current target");
+        if (target && target->IsAlive())
+        {
+            Unit* victim = target->GetVictim();
+            // If the target is not attacking our group tank, or has zero victim, require caution
+            bool tankHasTarget = victim && victim->ToPlayer() && botAI->IsTank(victim->ToPlayer());
+            if (!tankHasTarget)
+            {
+                // Disallow AoE spells until the tank securely holds the primary target
+                if (action->getThreatType() == Action::ActionThreatType::Aoe)
+                    return 0.0f;
+
+                // For single target spells, throttle if target hasn't engaged anyone yet (fresh pull)
+                if (action->getThreatType() == Action::ActionThreatType::Single && !victim)
+                {
+                    return 0.0f;
+                }
+            }
+        }
+    }
+
     if (action->getThreatType() == Action::ActionThreatType::Aoe)
     {
         uint8 threat = AI_VALUE2(uint8, "threat", "aoe");

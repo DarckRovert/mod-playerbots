@@ -56,9 +56,17 @@ void FrostMageStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     );
     triggers.push_back(
         new TriggerNode(
+            "ice barrier",
+            {
+                NextAction("ice barrier", ACTION_DEFAULT + 0.9f)
+            }
+        )
+    );
+    triggers.push_back(
+        new TriggerNode(
             "medium health",
             {
-                NextAction("ice barrier", 29.0f)
+                NextAction("ice barrier", 87.0f)
             }
         )
     );
@@ -66,7 +74,7 @@ void FrostMageStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         new TriggerNode(
             "being attacked",
             {
-                NextAction("ice barrier", 29.0f)
+                NextAction("ice barrier", 88.0f)
             }
         )
     );
