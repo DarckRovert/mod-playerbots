@@ -19,6 +19,12 @@
 
 # Playerbots Module — Project Jaina Tactical Edition
 
+> [!WARNING]
+> ### 🛡️ OFFICIAL REPOSITORY SECURITY NOTICE / AVISO DE SEGURIDAD
+> This is the **ONLY** official repository for JainaCore Playerbots maintained by **[DarckRovert](https://github.com/DarckRovert)**.  
+> **Beware of fraudulent clones, bot accounts, and impersonators** (such as `Gel88566ight`, `Aursolstice160913-alt`, or similar disposable profiles) that scrape our documentation and distribute malicious loaders, trojans (infostealers), or password-protected `.zip` files through third-party download hosts (MediaFire, external domains).  
+> **JainaCore modules are open-source C++ source code only.** We NEVER distribute binary loaders, password-protected archives, or external `.exe` installers. Any external download claiming to be an "All-in-one loader" or "Pre-compiled JainaCore release" is MALWARE.
+
 `mod-playerbots` is an advanced player simulation module for [JainaCore](https://github.com/DarckRovert/JainaCore) / [AzerothCore](https://www.azerothcore.org/) (WotLK 3.3.5a).
 
 ### ⚔️ Project Jaina Sovereign Innovations:
