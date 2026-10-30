@@ -1848,6 +1848,16 @@ void PlayerbotFactory::InitTalentsBySpecNo(Player* bot, int specNo, bool reset)
         if ((classMask & talentTabInfo->ClassMask) == 0)
             continue;
 
+        if (sPlayerbotAIConfig.limitTalentsExpansion)
+        {
+            uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+            uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+            if (effLevel <= 60 && (talentInfo->Row > 6 || (talentInfo->Row == 6 && talentInfo->Col != 1)))
+                continue;
+            if (effLevel <= 70 && (talentInfo->Row > 8 || (talentInfo->Row == 8 && talentInfo->Col != 1)))
+                continue;
+        }
+
         spells_row[talentInfo->Row].push_back(talentInfo);
     }
     while (startLevel > 1 && startLevel < 80 &&
@@ -1864,12 +1874,21 @@ void PlayerbotFactory::InitTalentsBySpecNo(Player* bot, int specNo, bool reset)
         for (std::vector<uint32>& p : sPlayerbotAIConfig.parsedSpecLinkOrder[cls][specNo][level])
         {
             uint32 tab = p[0], row = p[1], col = p[2], lvl = p[3];
+            if (sPlayerbotAIConfig.limitTalentsExpansion)
+            {
+                uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+                uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+                if (effLevel <= 60 && (row > 6 || (row == 6 && col != 1)))
+                    continue;
+                if (effLevel <= 70 && (row > 8 || (row == 8 && col != 1)))
+                    continue;
+            }
             uint32 talentID = -1;
 
             std::vector<TalentEntry const*>& spells = spells_row[row];
             if (spells.size() <= 0)
             {
-                return;
+                continue;
             }
             for (TalentEntry const* talentInfo : spells)
             {
@@ -1933,6 +1952,16 @@ void PlayerbotFactory::InitTalentsByParsedSpecLink(Player* bot, std::vector<std:
         if ((classMask & talentTabInfo->ClassMask) == 0)
             continue;
 
+        if (sPlayerbotAIConfig.limitTalentsExpansion)
+        {
+            uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+            uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+            if (effLevel <= 60 && (talentInfo->Row > 6 || (talentInfo->Row == 6 && talentInfo->Col != 1)))
+                continue;
+            if (effLevel <= 70 && (talentInfo->Row > 8 || (talentInfo->Row == 8 && talentInfo->Col != 1)))
+                continue;
+        }
+
         spells_row[talentInfo->Row].push_back(talentInfo);
     }
     for (std::vector<uint32>& p : parsedSpecLink)
@@ -1943,7 +1972,7 @@ void PlayerbotFactory::InitTalentsByParsedSpecLink(Player* bot, std::vector<std:
         std::vector<TalentEntry const*>& spells = spells_row[row];
         if (spells.size() <= 0)
         {
-            return;
+            continue;
         }
         for (TalentEntry const* talentInfo : spells)
         {
@@ -3702,6 +3731,16 @@ void PlayerbotFactory::InitTalents(uint32 specNo)
         if ((classMask & talentTabInfo->ClassMask) == 0)
             continue;
 
+        if (sPlayerbotAIConfig.limitTalentsExpansion)
+        {
+            uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+            uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+            if (effLevel <= 60 && (talentInfo->Row > 6 || (talentInfo->Row == 6 && talentInfo->Col != 1)))
+                continue;
+            if (effLevel <= 70 && (talentInfo->Row > 8 || (talentInfo->Row == 8 && talentInfo->Col != 1)))
+                continue;
+        }
+
         spells[talentInfo->Row].push_back(talentInfo);
     }
 
@@ -3766,6 +3805,16 @@ void PlayerbotFactory::InitTalentsByTemplate(uint32 specTab)
         if ((classMask & talentTabInfo->ClassMask) == 0)
             continue;
 
+        if (sPlayerbotAIConfig.limitTalentsExpansion)
+        {
+            uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+            uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+            if (effLevel <= 60 && (talentInfo->Row > 6 || (talentInfo->Row == 6 && talentInfo->Col != 1)))
+                continue;
+            if (effLevel <= 70 && (talentInfo->Row > 8 || (talentInfo->Row == 8 && talentInfo->Col != 1)))
+                continue;
+        }
+
         spells_row[talentInfo->Row].push_back(talentInfo);
     }
     while (startLevel > 1 && startLevel < 80 &&
@@ -3782,10 +3831,12 @@ void PlayerbotFactory::InitTalentsByTemplate(uint32 specTab)
         for (std::vector<uint32>& p : sPlayerbotAIConfig.parsedSpecLinkOrder[cls][specIndex][level])
         {
             uint32 tab = p[0], row = p[1], col = p[2], lvl = p[3];
-            if (sPlayerbotAIConfig.limitTalentsExpansion && bot->GetLevel() <= 60 && (row > 6 || (row == 6 && col != 1)))
+            uint32 const maxRealmLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+            uint32 const effLevel = std::min<uint32>(bot->GetLevel(), maxRealmLevel);
+            if (sPlayerbotAIConfig.limitTalentsExpansion && effLevel <= 60 && (row > 6 || (row == 6 && col != 1)))
                 continue;
 
-            if (sPlayerbotAIConfig.limitTalentsExpansion && bot->GetLevel() <= 70 && (row > 8 || (row == 8 && col != 1)))
+            if (sPlayerbotAIConfig.limitTalentsExpansion && effLevel <= 70 && (row > 8 || (row == 8 && col != 1)))
                 continue;
 
             uint32 talentID = 0;

@@ -2660,22 +2660,28 @@ void RandomPlayerbotMgr::OnBotLoginInternal(Player* const bot)
         }
     }
 
-    // Run guild recovery/assignment at login to handle empty guild tables after restart.
-    if (sPlayerbotAIConfig.randomBotGuildCount > 0)
+    // Protect curated HeroBots and Elite Squad (!IsRandomBot) from random guild/gear/arena overwrites
+    if (IsRandomBot(bot))
     {
-        PlayerbotFactory factory(bot, bot->GetLevel());
-        factory.InitGuild();
+        // Run guild recovery/assignment at login to handle empty guild tables after restart.
+        if (sPlayerbotAIConfig.randomBotGuildCount > 0)
+        {
+            PlayerbotFactory factory(bot, bot->GetLevel());
+            factory.InitGuild();
+        }
+
+        // Automated Equipment Safeguard: If bot is missing a weapon or chest on login, equip it immediately
+        if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) ||
+            !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST))
+        {
+            PlayerbotFactory factory(bot, bot->GetLevel());
+            factory.InitEquipment(false, false);
+        }
+
+        RandomPlayerbotFactory::AssignBotToArenaTeam(bot);
     }
 
-    // Automated Equipment Safeguard: If bot is missing a weapon or chest on login, equip it immediately
-    if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) ||
-        !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST))
-    {
-        PlayerbotFactory factory(bot, bot->GetLevel());
-        factory.InitEquipment(false, false);
-    }
-
-    RandomPlayerbotFactory::AssignBotToArenaTeam(bot);
+    bot->SetPvP(sWorld->IsPvPRealm());
 
     if (sPlayerbotAIConfig.randomBotFixedLevel)
     {
@@ -2767,10 +2773,8 @@ void RandomPlayerbotMgr::OnPlayerLogin(Player* player)
         // player->Relocate(botPos.getX(), botPos.getY(), botPos.getZ(), botPos.getO());
     }
 
-    if (IsRandomBot(player))
+    if (IsRandomBot(player) || GET_PLAYERBOT_AI(player))
     {
-        // ObjectGuid::LowType guid = player->GetGUID().GetCounter(); //not used, conditional could be rewritten for
-        // simplicity. line marked for removal.
         player->SetPvP(sWorld->IsPvPRealm());
     }
     else

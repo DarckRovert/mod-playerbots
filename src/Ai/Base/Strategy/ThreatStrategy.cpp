@@ -6,6 +6,7 @@
 
 #include "ThreatStrategy.h"
 #include "GenericSpellActions.h"
+#include "Group.h"
 #include "Map.h"
 #include "Playerbots.h"
 
@@ -23,27 +24,48 @@ float ThreatMultiplier::GetValue(Action* action)
         return 1.0f;
 
     Player* bot = botAI->GetBot();
-    // Project Jaina Threat Lead Time: On newly engaged targets or fresh multi-mob pulls,
-    // prevent non-tank DPS from dropping immediate heavy AoE or massive nukes before the tank
-    // establishes baseline threat (preventing instant one-shots on casters and wiping on adds).
-    if (bot && !botAI->IsTank(bot))
+    // Project Jaina Threat Lead Time: Strictly inside PvE Dungeon/Raid instances against non-player
+    // creatures, and ONLY when the group has an alive, nearby Tank, prevent non-tank DPS from dropping
+    // immediate heavy AoE or fresh-pull nukes before the tank establishes baseline threat.
+    // Never throttle in Open World, Battlegrounds, Arenas, PvP targets, or tankless groups.
+    if (bot && !botAI->IsTank(bot) && bot->GetMap() && bot->GetMap()->IsDungeon() &&
+        !bot->InBattleground() && !bot->InArena())
     {
         Unit* target = AI_VALUE(Unit*, "current target");
-        if (target && target->IsAlive())
+        if (target && target->IsAlive() && !target->IsPlayer())
         {
-            Unit* victim = target->GetVictim();
-            // If the target is not attacking our group tank, or has zero victim, require caution
-            bool tankHasTarget = victim && victim->ToPlayer() && botAI->IsTank(victim->ToPlayer());
-            if (!tankHasTarget)
+            bool groupHasActiveTank = false;
+            if (Group* group = bot->GetGroup())
             {
-                // Disallow AoE spells until the tank securely holds the primary target
-                if (action->getThreatType() == Action::ActionThreatType::Aoe)
-                    return 0.0f;
-
-                // For single target spells, throttle if target hasn't engaged anyone yet (fresh pull)
-                if (action->getThreatType() == Action::ActionThreatType::Single && !victim)
+                for (GroupReference* ref = group->GetFirstMember(); ref != nullptr; ref = ref->next())
                 {
-                    return 0.0f;
+                    Player* member = ref->GetSource();
+                    if (member && member != bot && member->IsInWorld() && member->IsAlive() &&
+                        member->GetMapId() == bot->GetMapId() &&
+                        bot->GetDistance2d(member) <= sPlayerbotAIConfig.sightDistance &&
+                        botAI->IsTank(member))
+                    {
+                        groupHasActiveTank = true;
+                        break;
+                    }
+                }
+            }
+
+            if (groupHasActiveTank)
+            {
+                Unit* victim = target->GetVictim();
+                bool tankHasTarget = victim && victim->ToPlayer() && botAI->IsTank(victim->ToPlayer());
+                if (!tankHasTarget)
+                {
+                    // Disallow AoE spells until the tank securely holds the primary target
+                    if (action->getThreatType() == Action::ActionThreatType::Aoe)
+                        return 0.0f;
+
+                    // For single target spells, throttle if target hasn't engaged anyone yet (fresh pull)
+                    if (action->getThreatType() == Action::ActionThreatType::Single && !victim)
+                    {
+                        return 0.0f;
+                    }
                 }
             }
         }

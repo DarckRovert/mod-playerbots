@@ -388,9 +388,9 @@ void PlayerbotHolder::LogoutAllBots()
         if (!botAI || IsSelfBot(bot))
             continue;
 
-        // Project Jaina Anti-Despawn: Do not log out RandomBots that belong to the world roaming pool.
-        // Release them back into the world (roaming) so they remain active.
-        if (sRandomPlayerbotMgr.IsRandomBot(bot))
+        // Project Jaina Anti-Despawn: Do not log out RandomBots or persistent world HeroBots/EliteSquad
+        // registered in sRandomPlayerbotMgr. Release them back into the world (roaming) so they remain active.
+        if (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.GetPlayerBot(bot->GetGUID()) != nullptr)
         {
             botAI->SetMaster(nullptr);
             botAI->ResetStrategies(false);
