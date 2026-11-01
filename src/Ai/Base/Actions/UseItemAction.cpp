@@ -12,6 +12,8 @@
 #include "ItemUsageValue.h"
 #include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
+#include "LootObjectStack.h"
+#include "ServerFacade.h"
 
 static constexpr uint32 SPELL_LEARNING_1 = 483;
 static constexpr uint32 SPELL_LEARNING_2 = 55884;
@@ -47,14 +49,19 @@ bool UseItemAction::Execute(Event event)
 
 bool UseItemAction::UseGameObject(ObjectGuid guid)
 {
+    auto fail = [this](char const* name, char const* defaultText)
+    {
+        botAI->TellError(PlayerbotTextMgr::instance().GetBotTextOrDefault(name, defaultText, {}));
+        return false;
+    };
     GameObject* go = botAI->GetGameObject(guid);
     if (!go || !go->isSpawned() /* || go->GetGoState() != GO_STATE_READY*/)
         return false;
 
-    if (sPlayerbotAIConfig.DisallowedGameObjects.contains(go->GetEntry()))
+    if (sPlayerbotAIConfig.disallowedGameObjects.contains(go->GetEntry()))
         return fail("gameobject_disallowed_error", "Game object is disallowed by configuration");
 
-    if (sPlayerbotAIConfig.LootDistance && bot->GetDistance(go) > sPlayerbotAIConfig.LootDistance)
+    if (sPlayerbotAIConfig.lootDistance && bot->GetDistance(go) > sPlayerbotAIConfig.lootDistance)
         return fail("gameobject_outside_loot_distance_error", "Game object is outside the configured loot distance");
 
     if (go->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE) ||

@@ -10,5 +10,5 @@
 
 LootObject NearestLootValue::Calculate()
 {
-    return AI_VALUE(LootObjectStack*, "available loot")->GetLoot(sPlayerbotAIConfig.LootDistance);
+    return AI_VALUE(LootObjectStack*, "available loot")->GetLoot(sPlayerbotAIConfig.lootDistance);
 }
