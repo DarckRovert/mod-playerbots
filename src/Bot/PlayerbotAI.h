@@ -587,6 +587,8 @@ public:
     void ResetJumpDestination() { jumpDestination = Position(); }
 
     bool CanMove();
+    bool HasTacticalMovementLock() const;
+    void SetTacticalMovementLock(uint32 durationMs);
     bool IsInRealGuild();
     static std::vector<std::string> dispel_whitelist;
     bool EqualLowercaseName(std::string s1, std::string s2);
@@ -663,6 +665,7 @@ protected:
     Position jumpDestination = Position();
     uint32 nextTransportCheck = 0;
     bool spellInterruptRequested = false;
+    uint32 tacticalMovementLockEnd = 0;
 };
 
 #endif

@@ -80,8 +80,14 @@ bool PetAttackTrigger::IsActive()
 
 bool DuelActiveTrigger::IsActive()
 {
-    return bot->duel && bot->duel->Opponent && bot->duel->State == DUEL_STATE_IN_PROGRESS &&
-           bot->duel->Opponent->IsAlive() && !AI_VALUE(Unit*, "current target");
+    if (!bot->duel || !bot->duel->Opponent || bot->duel->State != DUEL_STATE_IN_PROGRESS)
+        return false;
+
+    if (!bot->duel->Opponent->IsAlive())
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    return !currentTarget || currentTarget != bot->duel->Opponent || !bot->GetVictim() || bot->GetVictim() != bot->duel->Opponent;
 }
 
 bool HighManaTrigger::IsActive()

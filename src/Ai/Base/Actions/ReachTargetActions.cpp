@@ -27,9 +27,26 @@ bool ReachTargetAction::isUseful()
     {
         return false;
     }
+
+    // Project Jaina: Tactical movement lock set by Lua/ApexPvE or manual maneuvers
+    if (botAI->HasTacticalMovementLock())
+    {
+        return false;
+    }
+
     Unit* target = GetTarget();
     if (!target || bot->IsWithinCombatRange(target, distance))
         return false;
+
+    // Project Jaina: Casters and ranged classes must maintain tactical distance (>15y) unless LoS is broken
+    if (bot->IsInCombat() && PlayerbotAI::IsRanged(bot))
+    {
+        float dist = bot->GetExactDist(target);
+        if (dist >= 15.0f && bot->IsWithinLOSInMap(target))
+        {
+            return false;
+        }
+    }
 
     return !(ChasesEnemy() && IsChaseLeashed(target));
 }

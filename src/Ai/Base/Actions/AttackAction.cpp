@@ -221,13 +221,16 @@ bool AttackDuelOpponentAction::Execute(Event /*event*/)
         bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
     }
 
+    ServerFacade::instance().SetFacingTo(bot, duelTarget);
+    context->GetValue<Unit*>("current target")->Set(duelTarget);
+
     bool result = Attack(duelTarget);
-    if (result)
-    {
-        ServerFacade::instance().SetFacingTo(bot, duelTarget);
-        if (bot->GetPet())
-            botAI->PetAttack(duelTarget);
-    }
+    if (!result && bot->GetVictim() == duelTarget)
+        result = true;
+
+    if (bot->GetPet())
+        botAI->PetAttack(duelTarget);
+
     return result;
 }
 

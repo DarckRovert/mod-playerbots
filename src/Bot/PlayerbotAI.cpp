@@ -6246,6 +6246,22 @@ bool PlayerbotAI::CanMove()
     return true;
 }
 
+bool PlayerbotAI::HasTacticalMovementLock() const
+{
+    return tacticalMovementLockEnd > getMSTime();
+}
+
+void PlayerbotAI::SetTacticalMovementLock(uint32 durationMs)
+{
+    tacticalMovementLockEnd = getMSTime() + durationMs;
+    if (aiObjectContext && bot && bot->IsInWorld())
+    {
+        LastMovement& lastMove = *aiObjectContext->GetValue<LastMovement&>("last movement");
+        lastMove.Set(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+                     bot->GetOrientation(), static_cast<float>(durationMs), MovementPriority::MOVEMENT_FORCED);
+    }
+}
+
 bool PlayerbotAI::IsInRealGuild()
 {
     if (!bot->GetGuildId())
