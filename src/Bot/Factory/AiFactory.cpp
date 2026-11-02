@@ -285,9 +285,9 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
     uint8 tab = GetPlayerSpecTab(player);
 
     if (!player->InBattleground())
-        engine->addStrategiesNoInit("racials", "chat", "default", "cast time", "potions", "duel", "boost", nullptr);
+        engine->addStrategiesNoInit("racials", "chat", "default", "cast time", "potions", "duel", "boost", "pvp", nullptr);
     else
-        engine->addStrategiesNoInit("racials", "chat", "default", "cast time", "potions", "boost", nullptr);
+        engine->addStrategiesNoInit("racials", "chat", "default", "cast time", "potions", "boost", "pvp", nullptr);
 
     if (sPlayerbotAIConfig.autoAvoidAoe)
         engine->addStrategy("avoid aoe", false);
@@ -490,10 +490,10 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         if (player->InArena())
         {
             engine->addStrategy("arena", false);
-            engine->addStrategiesNoInit("boost", "racials", "chat", "default", "aoe", "cast time", "dps assist", nullptr);
+            engine->addStrategiesNoInit("boost", "racials", "chat", "default", "aoe", "cast time", "dps assist", "pvp", nullptr);
         }
         else
-            engine->addStrategiesNoInit("boost", "racials", "chat", "default", "aoe", "potions", "cast time", "dps assist", nullptr);
+            engine->addStrategiesNoInit("boost", "racials", "chat", "default", "aoe", "potions", "cast time", "dps assist", "pvp", nullptr);
 
         engine->removeStrategy("custom::say", false);
         engine->removeStrategy("flee", false);

@@ -18,16 +18,19 @@ bool NearestEnemyPlayersValue::AcceptUnit(Unit* unit)
 
     bool inCannon = botAI->IsInVehicle(false, true);
     Player* enemy = dynamic_cast<Player*>(unit);
-    if (enemy && botAI->IsOpposing(enemy) && enemy->IsPvP() &&
+    bool isDuelOpponent = enemy && bot->duel && bot->duel->Opponent == enemy && bot->duel->State == DUEL_STATE_IN_PROGRESS;
+    bool isFfaEnemy = enemy && bot->IsFFAPvP() && enemy->IsFFAPvP();
+    bool isOpposingPvp = enemy && (botAI->IsOpposing(enemy) || isDuelOpponent || isFfaEnemy || bot->InArena());
+    if (enemy && isOpposingPvp && (enemy->IsPvP() || isDuelOpponent) &&
         !sPlayerbotAIConfig.IsPvpProhibited(enemy->GetZoneId(), enemy->GetAreaId()) &&
         !enemy->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NON_ATTACKABLE_2) &&
         ((inCannon || !enemy->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))) &&
         /*!enemy->HasStealthAura() && !enemy->HasInvisibilityAura()*/ (bot->InBattleground() ? bot->CanSeeOrDetect(enemy) : enemy->CanSeeOrDetect(bot)) &&
         !(enemy->HasSpiritOfRedemptionAura()))
     {
-        // If with master, only attack if master is PvP flagged
+        // If with master, only attack if master is PvP flagged (or master is duel opponent)
         Player* master = botAI->GetMaster();
-        if (master && !master->IsPvP() && !master->IsFFAPvP())
+        if (master && !master->IsPvP() && !master->IsFFAPvP() && !isDuelOpponent)
             return false;
 
         return true;

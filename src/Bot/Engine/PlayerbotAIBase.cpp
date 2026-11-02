@@ -54,8 +54,10 @@ void PlayerbotAIBase::YieldThread(Player* bot, uint32 delay)
 {
     if (nextAICheckDelay < delay)
     {
-        // Adding a deterministic per-bot slight offset (0–200 ms) to stagger updates and prevent cpu spikes.
-        uint32 offset = bot ? (bot->GetGUID().GetCounter() % 201) : 0;
+        // Zero offset in combat for frame-perfect machine reaction; slight stagger only when idle out of combat
+        uint32 offset = 0;
+        if (bot && !bot->IsInCombat() && sPlayerbotAIConfig.dynamicReactDelay)
+            offset = (bot->GetGUID().GetCounter() % 51);
         nextAICheckDelay = delay + offset;
     }
 }

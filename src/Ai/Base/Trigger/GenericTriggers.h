@@ -574,6 +574,14 @@ public:
     virtual bool IsActive() override;
 };
 
+class DuelActiveTrigger : public Trigger
+{
+public:
+    DuelActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "duel active") {}
+
+    virtual bool IsActive() override;
+};
+
 class ItemCountTrigger : public Trigger
 {
 public:

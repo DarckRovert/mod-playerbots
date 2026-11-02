@@ -604,6 +604,7 @@ public:
     std::set<uint32> GetAllCurrentQuestIds();
     std::set<uint32> GetCurrentIncompleteQuestIds();
     void PetFollow();
+    void PetAttack(Unit* target);
     static float GetItemScoreMultiplier(ItemQualities quality);
     static bool IsHealingSpell(uint32 spellFamilyName, flag96 spellFamilyFlags);
     static SpellFamilyNames Class2SpellFamilyName(uint8 cls);

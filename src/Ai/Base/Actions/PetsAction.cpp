@@ -152,7 +152,7 @@ bool PetsAction::Execute(Event event)
     // The "attack" command forces pets/guardians to attack the master's selected target.
     else if (param == "attack")
     {
-        // Try to get the master's selected target.
+        // Try to get the master's selected target, falling back to bot's own combat target.
         Player* master = botAI->GetMaster();
         Unit* targetUnit = nullptr;
 
@@ -163,11 +163,21 @@ bool PetsAction::Execute(Event event)
                 targetUnit = botAI->GetUnit(masterTargetGuid);
         }
 
+        // If master has no target, use bot's own target
+        if (!targetUnit)
+            targetUnit = context->GetValue<Unit*>("current target")->Get();
+        if (!targetUnit)
+            targetUnit = context->GetValue<Unit*>("dps target")->Get();
+        if (!targetUnit && bot->GetVictim())
+            targetUnit = bot->GetVictim();
+        if (!targetUnit && !bot->GetTarget().IsEmpty())
+            targetUnit = botAI->GetUnit(bot->GetTarget());
+
         // If no valid target is selected, show an error and return.
         if (!targetUnit)
         {
             std::string text = PlayerbotTextMgr::instance().GetBotTextOrDefault(
-                "pet_no_target_error", "No valid target selected by master.", {});
+                "pet_no_target_error", "No valid target selected.", {});
             botAI->TellError(text);
             return false;
         }

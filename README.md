@@ -38,6 +38,7 @@
 - **Line-of-Sight Healing Triage:** Dynamic path probing with `OUT_OF_SIGHT_PENALTY` and self-preservation while preserving the signature `-25.0f` tank priority.
 - **Tank Auto-Pull Strategy:** Autonomous pull routines (`AutoPullAction`, `AutoPullStrategy`) with backward-compatible aliases.
 - **Shortcuts & Role Recruitment:** Direct `.bot` / `.playerbot` commands supporting `role recruit` (Tank, Healer, DPS) and `raid` (5-man, 10-man, 25-man).
+- **Relentless Dueling Engine & Caster Pet Integration (Hito #275):** Immediate transition to `BOT_STATE_COMBAT` upon duel countdown completion (`DuelActiveTrigger`), instant dismount, facing, offensive engagement via `AttackDuelOpponentAction`, complete same-faction duel exemption in target selectors, and proactive minion engagement for ranged spellcasters.
 
 ---
 

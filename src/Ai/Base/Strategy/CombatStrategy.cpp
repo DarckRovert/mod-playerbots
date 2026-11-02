@@ -50,9 +50,15 @@ void CombatStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
             }
         )
     );
-    // The pet-attack trigger is commented out because it was forcing the bot's pet to attack, overriding stay and follow commands.
-    // Pets will automatically attack the bot's enemy if they are in "defensive" or "aggressive"
-    // stance, or if the master issues an attack command.
+    // Project Jaina L9: Re-enabled pet attack trigger with safe stay/passive guards in PetAttackTrigger
+    triggers.push_back(
+        new TriggerNode(
+            "pet attack",
+            {
+                NextAction("pet attack", ACTION_MOVE + 8)
+            }
+        )
+    );
 }
 
 AvoidAoeStrategy::AvoidAoeStrategy(PlayerbotAI* botAI) : Strategy(botAI) {}

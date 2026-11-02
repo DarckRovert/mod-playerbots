@@ -12,6 +12,9 @@
 bool InvalidTargetValue::Calculate()
 {
     Unit* target = AI_VALUE(Unit*, qualifier);
+    if (target && bot->duel && bot->duel->Opponent == target && bot->duel->State == DUEL_STATE_IN_PROGRESS && target->IsAlive())
+        return false;
+
     Unit* enemy = AI_VALUE(Unit*, "enemy player target");
     if (target && enemy && target == enemy && target->IsAlive())
         return false;

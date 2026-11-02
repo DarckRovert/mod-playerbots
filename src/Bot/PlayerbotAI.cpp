@@ -6,6 +6,7 @@
 
 #include "PlayerbotAI.h"
 #include "AiFactory.h"
+#include "DatabaseEnv.h"
 #include "BudgetValues.h"
 #include "ChannelMgr.h"
 #include "CharacterPackets.h"
@@ -633,9 +634,37 @@ void PlayerbotAI::HandleCommands()
 
         if (!helper.ParseChatCommand(command, owner) && it->GetType() == CHAT_MSG_WHISPER)
         {
-            // ostringstream out; out << "Unknown command " << command;
-            // TellPlayer(out);
-            // helper.ParseChatCommand("help");
+            if (owner && IsRealPlayer(owner) && !command.empty())
+            {
+                std::string playerName = owner->GetName();
+                uint32 playerGuid = owner->GetGUID().GetCounter();
+                uint32 botGuid = bot->GetGUID().GetCounter();
+                std::string botName = bot->GetName();
+                uint32 zoneId = bot->GetZoneId();
+                uint32 mapId = bot->GetMapId();
+
+                std::string escMsg = command;
+                CharacterDatabase.EscapeString(escMsg);
+                std::string escPlayerName = playerName;
+                CharacterDatabase.EscapeString(escPlayerName);
+                std::string escBotName = botName;
+                CharacterDatabase.EscapeString(escBotName);
+
+                std::string extraData = Acore::StringFormat(
+                    "{{\"player_name\":\"{}\",\"player_guid\":{},\"player_gender\":{},\"player_message\":\"{}\",\"bot_name\":\"{}\",\"bot_guid\":{},\"channel\":\"whisper\"}}",
+                    escPlayerName, playerGuid, owner->getGender(), escMsg, escBotName, botGuid
+                );
+                std::string escExtraData = extraData;
+                CharacterDatabase.EscapeString(escExtraData);
+
+                CharacterDatabase.Execute(
+                    "INSERT INTO llm_chatter_events "
+                    "(event_type, event_scope, zone_id, map_id, priority, cooldown_key, "
+                    "subject_guid, subject_name, target_guid, target_name, target_entry, extra_data, status, react_after, expires_at) "
+                    "VALUES ('bot_whisper_player_msg', 'player', {}, {}, 9, '', {}, '{}', {}, '{}', 0, '{}', 'pending', NOW(), DATE_ADD(NOW(), INTERVAL 60 SECOND))",
+                    zoneId, mapId, playerGuid, escPlayerName, botGuid, escBotName, escExtraData
+                );
+            }
         }
 
         it = chatCommands.erase(it);
@@ -1564,6 +1593,29 @@ void PlayerbotAI::DoNextAction(bool min)
 
         ChangeEngine(BOT_STATE_NON_COMBAT);
         return;
+    }
+
+    // Project Jaina L9: Switch to combat engine immediately when duel starts
+    if (currentEngine == engines[BOT_STATE_NON_COMBAT] && bot->duel && bot->duel->State == DUEL_STATE_IN_PROGRESS &&
+        bot->duel->Opponent && bot->duel->Opponent->IsAlive())
+    {
+        aiObjectContext->GetValue<Unit*>("current target")->Set(bot->duel->Opponent);
+        ChangeEngine(BOT_STATE_COMBAT);
+        return;
+    }
+
+    // Project Jaina L9: If in combat engine against duel opponent but duel ended, stop attack cleanly
+    if (currentEngine == engines[BOT_STATE_COMBAT] && (!bot->duel || bot->duel->State != DUEL_STATE_IN_PROGRESS))
+    {
+        Unit* target = aiObjectContext->GetValue<Unit*>("current target")->Get();
+        if (target && target->IsPlayer() && target->IsFriendlyTo(bot) && !bot->IsInCombat())
+        {
+            aiObjectContext->GetValue<Unit*>("current target")->Set(nullptr);
+            bot->AttackStop();
+            bot->InterruptNonMeleeSpells(true);
+            ChangeEngine(BOT_STATE_NON_COMBAT);
+            return;
+        }
     }
 
     // Clear targets if in combat but sticking with old data
@@ -3908,6 +3960,11 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
     }
 
     forceRebuff.NoteCast(spellInfo);
+
+    if (target && bot->IsHostileTo(target))
+    {
+        PetAttack(target);
+    }
 
     return true;
 }
@@ -6748,59 +6805,23 @@ std::set<uint32> PlayerbotAI::GetCurrentIncompleteQuestIds()
 
 uint32 PlayerbotAI::GetReactDelay()
 {
-    uint32 base = sPlayerbotAIConfig.reactDelay;  // Default 100(ms)
-
-    // If dynamic react delay is disabled, use a static calculation
-    if (!sPlayerbotAIConfig.dynamicReactDelay)
-    {
-        if (HasGameClientMaster())
-            return base;
-
-        bool inBG = bot->InBattleground() || bot->InArena();
-
-        if (sPlayerbotAIConfig.fastReactInBG && inBG)
-            return base;
-
-        bool inCombat = bot->IsInCombat();
-
-        if (!inCombat)
-            return base * 10;
-
-        else if (inCombat)
-            return static_cast<uint32>(base * 2.5f);
-
-        return base;
-    }
-
-    // Dynamic react delay calculation:
+    uint32 base = sPlayerbotAIConfig.reactDelay;  // Machine reaction floor (e.g. 30ms)
 
     if (HasGameClientMaster())
         return base;
 
-    bool inBG = bot->InBattleground() || bot->InArena();
+    // High performance machine combat: instant frame-perfect reaction in combat, arena or battlegrounds!
+    if (bot->IsInCombat() || currentState == BOT_STATE_COMBAT || bot->InBattleground() || bot->InArena())
+        return base;
 
-    if (inBG)
-    {
-        if (bot->IsInCombat() || currentState == BOT_STATE_COMBAT)
-        {
-            return static_cast<uint32>(base * (sPlayerbotAIConfig.fastReactInBG ? 2.5f : 5.0f));
-        }
-        else
-        {
-            return static_cast<uint32>(base * (sPlayerbotAIConfig.fastReactInBG ? 1.0f : 10.0f));
-        }
-    }
+    // Out of combat: crisp pacing (no artificial 20-200x delays)
+    if (!sPlayerbotAIConfig.dynamicReactDelay)
+        return base * 2;
 
-    // When in combat, return 5 times the base
-    if (bot->IsInCombat() || currentState == BOT_STATE_COMBAT)
-        return base * 5;
-
-    // When not resting, return 10-30 times the base
     if (!bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING))
-        return base * urand(10, 30);
+        return base * 2;
 
-    // In other cases, return 20-200 times the base
-    return base * urand(20, 200);
+    return base * 4;
 }
 
 void PlayerbotAI::PetFollow()
@@ -6827,6 +6848,37 @@ void PlayerbotAI::PetFollow()
     charmInfo->RemoveStayPosition();
     charmInfo->SetForcedSpell(0);
     charmInfo->SetForcedTargetGUID();
+}
+
+void PlayerbotAI::PetAttack(Unit* target)
+{
+    Pet* pet = bot->GetPet();
+    if (!pet || !target || !target->IsAlive() || (!bot->IsHostileTo(target) && (!bot->duel || bot->duel->Opponent != target)))
+        return;
+
+    if (pet->GetVictim() == target)
+        return;
+
+    // Crowd control guard: never break breakable crowd control
+    if (target->HasBreakableByDamageCrowdControlAura())
+        return;
+
+    CharmInfo* charmInfo = pet->GetCharmInfo();
+    if (!charmInfo)
+        return;
+
+    charmInfo->SetCommandState(COMMAND_ATTACK);
+    charmInfo->SetIsCommandAttack(true);
+    charmInfo->SetIsAtStay(false);
+    charmInfo->SetIsReturning(false);
+    charmInfo->SetIsCommandFollow(false);
+    charmInfo->SetIsFollowing(false);
+
+    pet->SetReactState(REACT_DEFENSIVE);
+    pet->SetTarget(target->GetGUID());
+    pet->Attack(target, true);
+    if (CreatureAI* ai = pet->AI())
+        ai->AttackStart(target);
 }
 
 float PlayerbotAI::GetItemScoreMultiplier(ItemQualities quality)

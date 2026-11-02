@@ -239,6 +239,7 @@ public:
         creators["rpg craft"] = &TriggerContext::rpg_craft;
         creators["rpg trade useful"] = &TriggerContext::rpg_trade_useful;
         creators["rpg duel"] = &TriggerContext::rpg_duel;
+        creators["duel active"] = &TriggerContext::duel_active;
         creators["go grind status"] = &TriggerContext::go_grind_status;
         creators["go camp status"] = &TriggerContext::go_camp_status;
         creators["wander random status"] = &TriggerContext::wander_random_status;
@@ -437,6 +438,7 @@ private:
     static Trigger* combat_long_stuck(PlayerbotAI* botAI) { return new CombatLongStuckTrigger(botAI); }
     static Trigger* player_wants_in_bg(PlayerbotAI* botAI) { return new PlayerWantsInBattlegroundTrigger(botAI); }
     static Trigger* petition_signed(PlayerbotAI* botAI) { return new PetitionTurnInTrigger(botAI); }
+    static Trigger* duel_active(PlayerbotAI* botAI) { return new DuelActiveTrigger(botAI); }
     static Trigger* buy_tabard(PlayerbotAI* botAI) { return new BuyTabardTrigger(botAI); }
     static Trigger* leave_large_guild(PlayerbotAI* botAI) { return new LeaveLargeGuildTrigger(botAI); }
     static Trigger* rpg(PlayerbotAI* botAI) { return new RpgTrigger(botAI); }

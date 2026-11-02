@@ -13,6 +13,8 @@ void DuelStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(
         new TriggerNode("duel requested", { NextAction("accept duel", relevance) }));
     triggers.push_back(
+        new TriggerNode("duel active", { NextAction("attack duel opponent", 95.0f) }));
+    triggers.push_back(
         new TriggerNode("no attackers", { NextAction("attack duel opponent", 70.0f) }));
 }
 

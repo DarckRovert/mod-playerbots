@@ -56,17 +56,32 @@ bool PetAttackTrigger::IsActive()
     if (!pet)
         return false;
 
+    if (pet->GetReactState() == REACT_PASSIVE)
+        return false;
+
+    if (CharmInfo* charmInfo = pet->GetCharmInfo())
+    {
+        if (charmInfo->IsAtStay())
+            return false;
+    }
+
     Unit* target = AI_VALUE(Unit*, "current target");
     if (!target)
         return false;
 
-    if (pet->GetVictim() == target && pet->GetCharmInfo()->IsCommandAttack())
+    if (pet->GetVictim() == target && pet->GetCharmInfo() && pet->GetCharmInfo()->IsCommandAttack())
         return false;
 
     if (bot->GetMap()->IsDungeon() && bot->GetGroup() && !target->IsInCombat())
         return false;
 
     return true;
+}
+
+bool DuelActiveTrigger::IsActive()
+{
+    return bot->duel && bot->duel->Opponent && bot->duel->State == DUEL_STATE_IN_PROGRESS &&
+           bot->duel->Opponent->IsAlive() && !AI_VALUE(Unit*, "current target");
 }
 
 bool HighManaTrigger::IsActive()

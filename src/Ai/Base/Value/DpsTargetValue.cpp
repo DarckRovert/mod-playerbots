@@ -302,6 +302,10 @@ protected:
 
 Unit* DpsTargetValue::Calculate()
 {
+    // Step 0: Active Duel Target (Absolute Priority)
+    if (bot->duel && bot->duel->Opponent && bot->duel->State == DUEL_STATE_IN_PROGRESS && bot->duel->Opponent->IsAlive())
+        return bot->duel->Opponent;
+
     Unit* rti = RtiTargetValue::Calculate();
     if (rti)
         return rti;

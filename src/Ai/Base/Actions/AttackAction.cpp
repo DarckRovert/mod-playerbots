@@ -194,33 +194,42 @@ bool AttackAction::Attack(Unit* target, bool /*with_pet*/ /*true*/)
 
     if (!WaitForAttackStrategy::ShouldWait(botAI))
         bot->Attack(target, shouldMelee);
-    /* prevent pet dead immediately in group */
-    // if (bot->GetMap()->IsDungeon() && bot->GetGroup() && !target->IsInCombat())
-    // {
-    //     with_pet = false;
-    // }
-    // if (Pet* pet = bot->GetPet())
-    // {
-    //     if (with_pet)
-    //     {
-    //         pet->SetReactState(REACT_DEFENSIVE);
-    //         pet->SetTarget(target->GetGUID());
-    //         pet->GetCharmInfo()->SetIsCommandAttack(true);
-    //         pet->AI()->AttackStart(target);
-    //     }
-    //     else
-    //     {
-    //         pet->SetReactState(REACT_PASSIVE);
-    //         pet->GetCharmInfo()->SetIsCommandFollow(true);
-    //         pet->GetCharmInfo()->IsReturning();
-    //     }
-    // }
+
+    if (target && bot->IsHostileTo(target))
+    {
+        botAI->PetAttack(target);
+    }
+
     return true;
 }
 
-bool AttackDuelOpponentAction::isUseful() { return AI_VALUE(Unit*, "duel target"); }
+bool AttackDuelOpponentAction::isUseful()
+{
+    Unit* target = AI_VALUE(Unit*, "duel target");
+    return target && target->IsAlive() && bot->duel && bot->duel->State == DUEL_STATE_IN_PROGRESS;
+}
 
-bool AttackDuelOpponentAction::Execute(Event /*event*/) { return Attack(AI_VALUE(Unit*, "duel target")); }
+bool AttackDuelOpponentAction::Execute(Event /*event*/)
+{
+    Unit* duelTarget = AI_VALUE(Unit*, "duel target");
+    if (!duelTarget || !duelTarget->IsAlive())
+        return false;
+
+    if (bot->IsMounted())
+    {
+        bot->Dismount();
+        bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+    }
+
+    bool result = Attack(duelTarget);
+    if (result)
+    {
+        ServerFacade::instance().SetFacingTo(bot, duelTarget);
+        if (bot->GetPet())
+            botAI->PetAttack(duelTarget);
+    }
+    return result;
+}
 
 bool MeleeAction::isUseful()
 {
