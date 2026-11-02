@@ -5021,7 +5021,22 @@ uint32 PlayerbotAI::AutoScaleActivity(uint32 mod)
     return static_cast<uint32>(mod * (1 - lagProgress));
 }
 
-bool PlayerbotAI::IsOpposing(Player* player) { return IsOpposing(player->getRace(), bot->getRace()); }
+bool PlayerbotAI::IsOpposing(Player* player)
+{
+    if (!player)
+        return false;
+
+    if (bot->duel && bot->duel->Opponent == player && bot->duel->State == DUEL_STATE_IN_PROGRESS)
+        return true;
+
+    if (bot->InBattleground() && player->InBattleground())
+        return bot->GetTeamId() != player->GetTeamId();
+
+    if (bot->IsFFAPvP() && player->IsFFAPvP())
+        return true;
+
+    return IsOpposing(player->getRace(), bot->getRace());
+}
 
 bool PlayerbotAI::IsOpposing(uint8 race1, uint8 race2)
 {

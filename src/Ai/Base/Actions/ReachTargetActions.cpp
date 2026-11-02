@@ -23,7 +23,8 @@ bool ReachTargetAction::isUseful()
     }
 
     // do not move while casting
-    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
+    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr ||
+        bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) != nullptr)
     {
         return false;
     }

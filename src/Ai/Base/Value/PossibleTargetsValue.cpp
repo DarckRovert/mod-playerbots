@@ -36,6 +36,13 @@ void PossibleTargetsValue::FindUnits(std::list<Unit*>& targets)
     Acore::AnyUnfriendlyUnitInObjectRangeCheck u_check(bot, bot, range);
     Acore::UnitListSearcher<Acore::AnyUnfriendlyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
     Cell::VisitObjects(bot, searcher, range);
+
+    // Active duel opponent is hostile in the context of combat even if in the same party or friendly faction
+    if (bot->duel && bot->duel->Opponent && bot->duel->State == DUEL_STATE_IN_PROGRESS &&
+        bot->IsWithinDistInMap(bot->duel->Opponent, range))
+    {
+        targets.push_back(bot->duel->Opponent);
+    }
 }
 
 bool PossibleTargetsValue::AcceptUnit(Unit* unit)

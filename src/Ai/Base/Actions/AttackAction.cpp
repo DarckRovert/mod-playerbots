@@ -99,7 +99,7 @@ bool AttackAction::Attack(Unit* target, bool /*with_pet*/ /*true*/)
         return false;
     }
 
-    if (bot->IsFriendlyTo(target))
+    if (bot->IsFriendlyTo(target) && (!bot->duel || bot->duel->Opponent != target))
     {
         if (verbose)
             botAI->TellError(PlayerbotTextMgr::instance().GetBotTextOrDefault(
@@ -195,7 +195,8 @@ bool AttackAction::Attack(Unit* target, bool /*with_pet*/ /*true*/)
     if (!WaitForAttackStrategy::ShouldWait(botAI))
         bot->Attack(target, shouldMelee);
 
-    if (target && bot->IsHostileTo(target))
+    bool isDuelOpponent = target && bot->duel && bot->duel->Opponent == target && bot->duel->State == DUEL_STATE_IN_PROGRESS;
+    if (target && (bot->IsHostileTo(target) || isDuelOpponent))
     {
         botAI->PetAttack(target);
     }

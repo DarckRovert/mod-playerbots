@@ -1844,7 +1844,8 @@ bool FleeAction::Execute(Event /*event*/)
 
 bool FleeAction::isUseful()
 {
-    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
+    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr ||
+        bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) != nullptr)
         return false;
 
     Unit* target = AI_VALUE(Unit*, "current target");
@@ -2426,7 +2427,8 @@ bool CombatFormationMoveAction::isUseful()
     if (getMSTime() - moveInterval < uint32(lastMoveTimer))
         return false;
 
-    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
+    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr ||
+        bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) != nullptr)
         return false;
 
     return true;

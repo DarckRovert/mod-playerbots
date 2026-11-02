@@ -170,9 +170,10 @@ void AttackersValue::RemoveNonThreating(std::unordered_set<Unit*>& targets)
 
 bool AttackersValue::hasRealThreat(Unit* attacker)
 {
+    bool isDuelOpponent = attacker && bot->duel && bot->duel->Opponent == attacker && bot->duel->State == DUEL_STATE_IN_PROGRESS;
     return attacker && attacker->IsInWorld() && attacker->IsAlive() && !attacker->IsPolymorphed() &&
            // !attacker->isInRoots() &&
-           !attacker->IsFriendlyTo(bot);
+           (!attacker->IsFriendlyTo(bot) || isDuelOpponent);
 }
 
 bool AttackersValue::IsPossibleTarget(Unit* attacker, Player* bot, float /*range*/)
@@ -208,7 +209,7 @@ bool AttackersValue::IsPossibleTarget(Unit* attacker, Player* bot, float /*range
         return false;
 
     // Relationship checks
-    if (attacker->IsFriendlyTo(bot))
+    if (attacker->IsFriendlyTo(bot) && (!bot->duel || bot->duel->Opponent != attacker))
         return false;
 
     // Critter exception

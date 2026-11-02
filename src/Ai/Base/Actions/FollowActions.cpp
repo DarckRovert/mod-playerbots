@@ -242,7 +242,8 @@ bool FollowAction::isUseful()
         botAI->HasStrategy("move from group", BOT_STATE_NON_COMBAT))
         return false;
 
-    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
+    if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr ||
+        bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) != nullptr)
         return false;
 
     Formation* formation = AI_VALUE(Formation*, "formation");
@@ -268,6 +269,9 @@ bool FollowAction::isUseful()
             return false;
 
         if (fTarget->GetGUID() == bot->GetGUID())
+            return false;
+
+        if (bot->duel && bot->duel->Opponent == fTarget && bot->duel->State == DUEL_STATE_IN_PROGRESS)
             return false;
     }
 
@@ -341,6 +345,9 @@ bool FleeToGroupLeaderAction::isUseful()
         return false;
 
     if (botAI->GetGroupLeader() == bot)
+        return false;
+
+    if (bot->duel && bot->duel->Opponent == botAI->GetGroupLeader() && bot->duel->State == DUEL_STATE_IN_PROGRESS)
         return false;
 
     Unit* target = AI_VALUE(Unit*, "current target");

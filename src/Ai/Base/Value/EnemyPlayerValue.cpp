@@ -22,7 +22,7 @@ bool NearestEnemyPlayersValue::AcceptUnit(Unit* unit)
     bool isFfaEnemy = enemy && bot->IsFFAPvP() && enemy->IsFFAPvP();
     bool isOpposingPvp = enemy && (botAI->IsOpposing(enemy) || isDuelOpponent || isFfaEnemy || bot->InArena());
     if (enemy && isOpposingPvp && (enemy->IsPvP() || isDuelOpponent) &&
-        !sPlayerbotAIConfig.IsPvpProhibited(enemy->GetZoneId(), enemy->GetAreaId()) &&
+        (isDuelOpponent || !sPlayerbotAIConfig.IsPvpProhibited(enemy->GetZoneId(), enemy->GetAreaId())) &&
         !enemy->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NON_ATTACKABLE_2) &&
         ((inCannon || !enemy->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))) &&
         /*!enemy->HasStealthAura() && !enemy->HasInvisibilityAura()*/ (bot->InBattleground() ? bot->CanSeeOrDetect(enemy) : enemy->CanSeeOrDetect(bot)) &&
