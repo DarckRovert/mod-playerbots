@@ -160,14 +160,14 @@ public:
                 if (loc == LOCALE_esES || loc == LOCALE_esMX)
                 {
                     ChatHandler(player->GetSession()).SendSysMessage(
-                        "|cff00ff00Este servidor opera con |cff00ccffmod-playerbots|r "
-                        "|cffcccccchttps://github.com/mod-playerbots/mod-playerbots|r");
+                        "|cff00ff00Este servidor opera con |cff00ccffProject Jaina Core|r "
+                        "|cffcccccchttps://github.com/DarckRovert/JainaCore|r");
                 }
                 else
                 {
                     ChatHandler(player->GetSession()).SendSysMessage(
-                        "|cff00ff00This server runs with |cff00ccffmod-playerbots|r "
-                        "|cffcccccchttps://github.com/mod-playerbots/mod-playerbots|r");
+                        "|cff00ff00This server runs with |cff00ccffProject Jaina Core|r "
+                        "|cffcccccchttps://github.com/DarckRovert/JainaCore|r");
                 }
             }
 
