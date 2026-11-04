@@ -78,7 +78,7 @@ static void ParseLevelMgrExcludeNames(std::string const& csv, std::vector<std::s
 
 bool PlayerbotAIConfig::Initialize()
 {
-    LOG_INFO("server.loading", "Initializing mod-playerbots, based on AI Playerbots by ike3 and the original Playerbots by blueboy");
+    LOG_INFO("server.loading", "Initializing JainaCore Playerbots Engine, based on AI Playerbots by ike3 and blueboy");
 
     enabled = sConfigMgr->GetOption<bool>("AiPlayerbot.Enabled", true);
     if (!enabled)
@@ -308,7 +308,7 @@ bool PlayerbotAIConfig::Initialize()
     randomBotJoinLfg = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinLfg", true);
     RandomBotJoinLfgOutleveledExpansion =
         sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinLfgOutleveledExpansion",
-            sConfigMgr->GetOption<bool>("Playerbots.RandomBotJoinLfgOutleveledExpansion", true));
+            sConfigMgr->GetOption<bool>("Playerbots.RandomBotJoinLfgOutleveledExpansion", true, false));
 
     restrictHealerDPS = sConfigMgr->GetOption<bool>("AiPlayerbot.HealerDPSMapRestriction", false);
     LoadList<std::vector<uint32>>(
@@ -827,7 +827,7 @@ bool PlayerbotAIConfig::Initialize()
     LoadList<std::vector<uint32>>(sConfigMgr->GetOption<std::string>("AiPlayerbot.ExcludedHunterPetFamilies", ""), excludedHunterPetFamilies);
 
     LOG_INFO("server.loading", "---------------------------------------");
-    LOG_INFO("server.loading", "       mod-playerbots initialized      ");
+    LOG_INFO("server.loading", "  JainaCore Playerbots Engine Loaded   ");
     LOG_INFO("server.loading", "---------------------------------------");
 
     return true;

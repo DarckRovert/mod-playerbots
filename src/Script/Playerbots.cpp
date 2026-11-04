@@ -539,13 +539,13 @@ public:
         // but it should be publicly accessible and include all modifications you've made
         LOG_INFO("server.loading", "╔══════════════════════════════════════════════════════════╗");
         LOG_INFO("server.loading", "║                                                          ║");
-        LOG_INFO("server.loading", "║              AzerothCore Playerbots Module               ║");
+        LOG_INFO("server.loading", "║              JainaCore Playerbots Engine                 ║");
         LOG_INFO("server.loading", "║                                                          ║");
         LOG_INFO("server.loading", "╟──────────────────────────────────────────────────────────╢");
-        LOG_INFO("server.loading", "║     mod-playerbots is a community-driven open-source     ║");
-        LOG_INFO("server.loading", "║  project based on AzerothCore, licensed under GNU GPLv2  ║");
+        LOG_INFO("server.loading", "║       Project Jaina - Living Lore & Neural AI Bots       ║");
+        LOG_INFO("server.loading", "║            Licensed under GNU GPLv2 / JainaCore          ║");
         LOG_INFO("server.loading", "╟──────────────────────────────────────────────────────────╢");
-        LOG_INFO("server.loading", "║     https://github.com/mod-playerbots/mod-playerbots     ║");
+        LOG_INFO("server.loading", "║       https://github.com/DarckRovert/JainaCore           ║");
         LOG_INFO("server.loading", "╚══════════════════════════════════════════════════════════╝");
 
         uint32 oldMSTime = getMSTime();
