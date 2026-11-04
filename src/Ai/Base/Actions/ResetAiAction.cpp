@@ -61,6 +61,8 @@ bool ResetAiAction::Execute(Event event)
     }
     PlayerbotRepository::instance().Reset(botAI);
     botAI->ResetStrategies(false);
-    botAI->TellMaster("AI was reset to defaults");
+    bool isLeader = bot->GetGroup() && bot->GetGroup()->IsLeader(bot->GetGUID());
+    if (!isLeader)
+        botAI->TellMaster("AI was reset to defaults");
     return true;
 }
