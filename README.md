@@ -104,3 +104,17 @@ Also, a thank you to the many contributors who've helped build this project:
 <a href="https://github.com/mod-playerbots/mod-playerbots/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=mod-playerbots/mod-playerbots" />
 </a>
+
+---
+
+## 🛡️ JainaCore Sovereign Changelog
+
+| Hito | Fecha | Cambio |
+| :--- | :--- | :--- |
+| **Hito #291** | 04-Nov-2026 | **Branding Soberano**: Banner `"AzerothCore Playerbots Module"` → `"JainaCore Playerbots Engine"`. Init/Loaded strings soberanos. Fallback `Playerbots.RandomBotJoinLfgOutleveledExpansion` silenciado. SHA-256: `FB3295EF...` |
+| **Hito #275** | 2026 | Relentless Dueling Engine & Caster Pet Integration. |
+| **Hito #276** | 2026 | Tactical Movement Lock, SetTacticalMovementLock/HasTacticalMovementLock bindings Eluna. |
+
+**Repositorio soberano:** [DarckRovert/mod-playerbots](https://github.com/DarckRovert/mod-playerbots)  
+**Ecosistema:** Project JAIna — JainaCore 3.3.5a (WotLK, Build 12340)  
+**Fecha de actualización:** 4 de Noviembre de 2026
