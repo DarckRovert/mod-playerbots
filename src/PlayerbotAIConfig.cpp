@@ -308,7 +308,7 @@ bool PlayerbotAIConfig::Initialize()
     randomBotJoinLfg = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinLfg", true);
     RandomBotJoinLfgOutleveledExpansion =
         sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinLfgOutleveledExpansion",
-            sConfigMgr->GetOption<bool>("Playerbots.RandomBotJoinLfgOutleveledExpansion", true, false));
+            sConfigMgr->GetOption<bool>("Playerbots.RandomBotJoinLfgOutleveledExpansion", true, false), false);
 
     restrictHealerDPS = sConfigMgr->GetOption<bool>("AiPlayerbot.HealerDPSMapRestriction", false);
     LoadList<std::vector<uint32>>(
