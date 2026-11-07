@@ -819,8 +819,25 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
         if (!ObjectAccessor::FindPlayer(guid))
             return "player is offline";
 
-        if (!GetPlayerBot(guid))
+        Player* bot = GetPlayerBot(guid);
+        if (!bot)
+        {
+            // Support for RandomBots/RDF bots present in the player's group
+            Player* rBot = sRandomPlayerbotMgr.GetPlayerBot(guid);
+            if (rBot && masterguid && rBot->GetGroup() && rBot->GetGroup()->IsMember(masterguid))
+            {
+                PlayerbotAI* botAI = GET_PLAYERBOT_AI(rBot);
+                if (botAI)
+                {
+                    botAI->SetMaster(nullptr);
+                    botAI->ResetStrategies(false);
+                    if (rBot->GetGroup())
+                        botAI->LeaveOrDisbandGroup();
+                }
+                return "ok";
+            }
             return "not your bot";
+        }
 
         LogoutPlayerBot(guid);
         return "ok";
@@ -1688,7 +1705,7 @@ std::vector<std::string> PlayerbotHolder::HandlePlayerbotCommand(char const* arg
         }
     }
 
-    if (charnameStr == "!" && master && master->GetSession()->GetSecurity() > SEC_GAMEMASTER)
+    else if (charnameStr == "!" && master && master->GetSession()->GetSecurity() > SEC_GAMEMASTER)
     {
         for (PlayerBotMap::const_iterator i = GetPlayerBotsBegin(); i != GetPlayerBotsEnd(); ++i)
         {
@@ -1697,65 +1714,67 @@ std::vector<std::string> PlayerbotHolder::HandlePlayerbotCommand(char const* arg
                     bots.insert(bot->GetName());
         }
     }
-
-    std::vector<std::string> chars = split(charnameStr, ',');
-    for (std::vector<std::string>::iterator i = chars.begin(); i != chars.end(); i++)
+    else
     {
-        std::string s = *i;
-
-        if (!strcmp(cmd, "addaccount"))
+        std::vector<std::string> chars = split(charnameStr, ',');
+        for (std::vector<std::string>::iterator i = chars.begin(); i != chars.end(); i++)
         {
-            // When using addaccount, first try to get account ID directly
-            uint32 accountId = GetAccountId(s);
-            if (!accountId)
+            std::string s = *i;
+
+            if (!strcmp(cmd, "addaccount"))
             {
-                // If not found, try to get account ID from character name
-                std::string charName = s;
-                if (!normalizePlayerName(charName))
-                {
-                    messages.push_back("Neither account nor character '" + s + "' found");
-                    continue;
-                }
-                ObjectGuid charGuid = sCharacterCache->GetCharacterGuidByName(charName);
-                if (!charGuid)
-                {
-                    messages.push_back("Neither account nor character '" + s + "' found");
-                    continue;
-                }
-                accountId = sCharacterCache->GetCharacterAccountIdByGuid(charGuid);
+                // When using addaccount, first try to get account ID directly
+                uint32 accountId = GetAccountId(s);
                 if (!accountId)
                 {
-                    messages.push_back("Could not find account for character '" + s + "'");
-                    continue;
+                    // If not found, try to get account ID from character name
+                    std::string charName = s;
+                    if (!normalizePlayerName(charName))
+                    {
+                        messages.push_back("Neither account nor character '" + s + "' found");
+                        continue;
+                    }
+                    ObjectGuid charGuid = sCharacterCache->GetCharacterGuidByName(charName);
+                    if (!charGuid)
+                    {
+                        messages.push_back("Neither account nor character '" + s + "' found");
+                        continue;
+                    }
+                    accountId = sCharacterCache->GetCharacterAccountIdByGuid(charGuid);
+                    if (!accountId)
+                    {
+                        messages.push_back("Could not find account for character '" + s + "'");
+                        continue;
+                    }
+                }
+
+                QueryResult results = CharacterDatabase.Query("SELECT name FROM characters WHERE account = {}", accountId);
+                if (results)
+                {
+                    do
+                    {
+                        Field* fields = results->Fetch();
+                        std::string const charName = fields[0].Get<std::string>();
+                        bots.insert(charName);
+                    } while (results->NextRow());
                 }
             }
-
-            QueryResult results = CharacterDatabase.Query("SELECT name FROM characters WHERE account = {}", accountId);
-            if (results)
+            else
             {
-                do
+                // For regular add command, only add the specific character
+                if (!normalizePlayerName(s))
                 {
-                    Field* fields = results->Fetch();
-                    std::string const charName = fields[0].Get<std::string>();
-                    bots.insert(charName);
-                } while (results->NextRow());
+                    messages.push_back("Character '" + *i + "' not found");
+                    continue;
+                }
+                ObjectGuid charGuid = sCharacterCache->GetCharacterGuidByName(s);
+                if (!charGuid)
+                {
+                    messages.push_back("Character '" + s + "' not found");
+                    continue;
+                }
+                bots.insert(s);
             }
-        }
-        else
-        {
-            // For regular add command, only add the specific character
-            if (!normalizePlayerName(s))
-            {
-                messages.push_back("Character '" + *i + "' not found");
-                continue;
-            }
-            ObjectGuid charGuid = sCharacterCache->GetCharacterGuidByName(s);
-            if (!charGuid)
-            {
-                messages.push_back("Character '" + s + "' not found");
-                continue;
-            }
-            bots.insert(s);
         }
     }
 
