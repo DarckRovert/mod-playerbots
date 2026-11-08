@@ -6,10 +6,10 @@
  * 1. Stateless & Re-entrant Rust: SquadBlackboardPOD (600B) is owned by C++ per map worker thread (thread_local),
  *    eliminating all Mutexes and preventing unbounded HashMap memory growth.
  * 2. Engine Action & Multiplier Architecture (R2): Integrated as `RustCombatAction` inside `Engine::DoNextAction`'s
- *    while-loop at relevance `ACTION_MOVE - 1.0f` (29.0f), so all Multipliers (BossAI, Passive) and all high-priority
- *    actions (`>= 30.0f`: Emergency 90, Raid 60, Dispel 50, Interrupt 40, Move 30) are evaluated first.
- * 3. Per-Bot Spell ID Cache: Resolves `"spell id"` strings once per (bot_guid, level, spec_id) and caches the `uint32_t`
- *    IDs on the worker thread so subsequent ticks perform zero string map lookups.
+ *    while-loop at relevance `ACTION_MOVE - 0.5f` (29.5f), so all Multipliers (BossAI, Passive) and all high-priority
+ *    actions (`>= 30.0f`: Emergency 90, Raid 60, Assist 50, Dispel 50, Interrupt 40, Move 30) are evaluated first.
+ * 3. Per-Bot Spell ID Cache: Resolves canonical WotLK 3.3.5a spell chains (`GetFirstSpellInChain`/`GetNextSpellInChain`)
+ *    once per (bot_guid, level, spec_id, form) and caches the `uint32_t` IDs on the worker thread (100% DBC-locale immune).
  */
 
 #ifndef PLAYERBOTS_RUST_COMBAT_BRIDGE_H
@@ -172,6 +172,7 @@ namespace JainaRustCombat
         std::atomic<uint64_t> shadowAgreements{0};
         std::atomic<uint64_t> shadowDisagreements{0};
         std::atomic<uint64_t> activeExecutions{0};
+        std::atomic<uint64_t> totalEvaluations{0};
         std::atomic<uint64_t> totalLatencyNs{0};
     };
 
@@ -301,168 +302,229 @@ namespace JainaRustCombat
         return &target;
     }
 
-    inline uint32_t ResolveKnownSpellId(Player* bot, AiObjectContext* ctx, char const* spellName)
+    inline uint32_t ResolveKnownSpellChain(Player* bot, uint32_t baseSpellId)
     {
-        if (!bot || !ctx || !spellName || !*spellName)
+        if (!bot || !baseSpellId)
             return 0;
 
-        uint32_t spellId = ctx->GetValue<uint32>("spell id", spellName)->Get();
-        if (!spellId)
-            return 0;
+        uint32_t firstId = sSpellMgr->GetFirstSpellInChain(baseSpellId);
+        if (!firstId)
+            firstId = baseSpellId;
 
-        // Regla R3: Nunca pasar hechizos de mascota a CastSpell (evita alternar autocast de mascota)
-        if (Pet* pet = bot->GetPet())
+        uint32_t bestId = 0;
+        uint32_t currId = firstId;
+        for (uint32_t step = 0; currId != 0 && step < 32; ++step)
         {
-            if (pet->HasSpell(spellId))
-                return 0;
+            if (bot->HasSpell(currId))
+            {
+                bool isPetSpell = false;
+                if (Pet* pet = bot->GetPet())
+                    isPetSpell = pet->HasSpell(currId);
+                if (!isPetSpell)
+                    bestId = currId;
+            }
+            uint32_t nextId = sSpellMgr->GetNextSpellInChain(currId);
+            if (!nextId || nextId == currId)
+                break;
+            currId = nextId;
         }
-
-        if (!bot->HasSpell(spellId))
-            return 0;
-
-        return spellId;
+        return bestId;
     }
 
-    inline void ResolveClassSpellBookIds(Player* bot, AiObjectContext* ctx, uint8_t classId, uint8_t specTab, uint32_t (&outSpells)[SLOT_MAX])
+    static constexpr size_t MAX_SLOT_CANDIDATES = 3;
+
+    inline void SetSlotCandidates(
+        Player* bot,
+        uint32_t (&outSpells)[SLOT_MAX][MAX_SLOT_CANDIDATES],
+        SpellSlot slot,
+        uint32_t s0,
+        uint32_t s1 = 0,
+        uint32_t s2 = 0)
+    {
+        uint32_t baseIds[MAX_SLOT_CANDIDATES] = { s0, s1, s2 };
+        size_t writeIdx = 0;
+        for (size_t i = 0; i < MAX_SLOT_CANDIDATES; ++i)
+        {
+            uint32_t id = ResolveKnownSpellChain(bot, baseIds[i]);
+            if (!id)
+                continue;
+            bool duplicate = false;
+            for (size_t j = 0; j < writeIdx; ++j)
+            {
+                if (outSpells[slot][j] == id)
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate)
+                outSpells[slot][writeIdx++] = id;
+        }
+    }
+
+    inline void ResolveClassSpellBookIds(
+        Player* bot,
+        AiObjectContext* /*ctx*/,
+        uint8_t classId,
+        uint8_t specTab,
+        uint8_t shapeshiftForm,
+        uint32_t (&outSpells)[SLOT_MAX][MAX_SLOT_CANDIDATES])
     {
         std::memset(outSpells, 0, sizeof(outSpells));
         switch (classId)
         {
             case CLASS_MAGE:
             {
-                char const* filler = (specTab == MAGE_TAB_ARCANE) ? "arcane blast" : (specTab == MAGE_TAB_FIRE ? "fireball" : "frostbolt");
-                outSpells[SLOT_PRIMARY_FILLER]    = ResolveKnownSpellId(bot, ctx, filler);
-                if (!outSpells[SLOT_PRIMARY_FILLER])
-                    outSpells[SLOT_PRIMARY_FILLER] = ResolveKnownSpellId(bot, ctx, "frostbolt");
-
-                outSpells[SLOT_INSTANT_PROC_1]    = ResolveKnownSpellId(bot, ctx, "ice lance");
-                uint32_t ffb = ResolveKnownSpellId(bot, ctx, "frostfire bolt");
-                outSpells[SLOT_INSTANT_PROC_2]    = ffb ? ffb : ResolveKnownSpellId(bot, ctx, "fireball");
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "deep freeze");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "fire blast");
-                outSpells[SLOT_BURST_COOLDOWN]    = ResolveKnownSpellId(bot, ctx, "icy veins");
-                outSpells[SLOT_SUMMON_OR_MIRROR]  = ResolveKnownSpellId(bot, ctx, "mirror image");
-                outSpells[SLOT_DEFENSIVE_BARRIER] = ResolveKnownSpellId(bot, ctx, "ice barrier");
-                outSpells[SLOT_INTERRUPT_SPELL]   = ResolveKnownSpellId(bot, ctx, "counterspell");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "blizzard");
-                outSpells[SLOT_DOT_MAINTENANCE]   = ResolveKnownSpellId(bot, ctx, "living bomb");
-                outSpells[SLOT_EMERGENCY_SAVE]    = ResolveKnownSpellId(bot, ctx, "evocation");
+                uint32_t filler = (specTab == MAGE_TAB_ARCANE) ? 30451u : (specTab == MAGE_TAB_FIRE ? 133u : 116u);
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    filler, 116u, 133u);          // Arcane Blast / Frostbolt / Fireball
+                SetSlotCandidates(bot, outSpells, SLOT_INSTANT_PROC_1,    30455u, 44425u, 2136u);       // Ice Lance / Arcane Barrage / Fire Blast
+                SetSlotCandidates(bot, outSpells, SLOT_INSTANT_PROC_2,    44614u, 11366u, 133u);        // Frostfire Bolt / Pyroblast / Fireball
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    44572u, 120u, 5143u);         // Deep Freeze / Cone of Cold / Arcane Missiles
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  2136u, 30455u, 120u);         // Fire Blast / Ice Lance / Cone of Cold
+                SetSlotCandidates(bot, outSpells, SLOT_BURST_COOLDOWN,    12472u, 12042u, 11129u);      // Icy Veins / Arcane Power / Combustion
+                SetSlotCandidates(bot, outSpells, SLOT_SUMMON_OR_MIRROR,  55342u, 31687u, 12043u);      // Mirror Image / Water Elemental / Presence of Mind
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 11426u, 1463u, 6143u);        // Ice Barrier / Mana Shield / Frost Ward
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   2139u);                       // Counterspell
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         10u, 2120u, 1449u);           // Blizzard / Flamestrike / Arcane Explosion
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   44457u);                      // Living Bomb
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    12051u, 45438u);              // Evocation / Ice Block
                 break;
             }
             case CLASS_WARLOCK:
             {
-                outSpells[SLOT_PRIMARY_FILLER]    = ResolveKnownSpellId(bot, ctx, "shadow bolt");
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "haunt");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "chaos bolt");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "shadowburn");
-                outSpells[SLOT_DOT_MAINTENANCE]   = ResolveKnownSpellId(bot, ctx, "corruption");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "seed of corruption");
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    686u, 29722u, 689u);          // Shadow Bolt / Incinerate / Drain Life
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    48181u, 50796u, 17962u);      // Haunt / Chaos Bolt / Conflagrate
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  17877u, 1120u, 6789u);        // Shadowburn / Drain Soul / Death Coil
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   172u, 348u, 980u);            // Corruption / Immolate / Curse of Agony
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         27243u, 5740u, 1949u);        // Seed of Corruption / Rain of Fire / Hellfire
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 28176u, 706u, 687u);          // Fel Armor / Demon Armor / Demon Skin
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    6789u, 689u);                 // Death Coil / Drain Life
                 break;
             }
             case CLASS_PRIEST:
             {
-                outSpells[SLOT_PRIMARY_FILLER]    = ResolveKnownSpellId(bot, ctx, "mind flay");
-                if (!outSpells[SLOT_PRIMARY_FILLER])
-                    outSpells[SLOT_PRIMARY_FILLER] = ResolveKnownSpellId(bot, ctx, "smite");
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "mind blast");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "shadow word: death");
-                outSpells[SLOT_DEFENSIVE_BARRIER] = ResolveKnownSpellId(bot, ctx, "power word: shield");
-                outSpells[SLOT_DOT_MAINTENANCE]   = ResolveKnownSpellId(bot, ctx, "shadow word: pain");
-                outSpells[SLOT_HEAL_FAST_INSTANT] = ResolveKnownSpellId(bot, ctx, "flash heal");
-                outSpells[SLOT_HEAL_BIG_DIRECT]   = ResolveKnownSpellId(bot, ctx, "greater heal");
-                outSpells[SLOT_HEAL_GROUP_CHAIN]  = ResolveKnownSpellId(bot, ctx, "prayer of healing");
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    15407u, 585u, 14914u);        // Mind Flay / Smite / Holy Fire
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    8092u, 47540u, 14914u);       // Mind Blast / Penance / Holy Fire
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  32379u, 2944u, 585u);         // Shadow Word: Death / Devouring Plague / Smite
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 17u, 588u, 586u);             // Power Word: Shield / Inner Fire / Fade
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   589u, 34914u, 2944u);         // Shadow Word: Pain / Vampiric Touch / Devouring Plague
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         48045u, 15237u);              // Mind Sear / Holy Nova
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    47585u, 19236u, 8122u);       // Dispersion / Desperate Prayer / Psychic Scream
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_FAST_INSTANT, 2061u, 47540u, 139u);         // Flash Heal / Penance / Renew
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_BIG_DIRECT,   2060u, 2054u, 2050u);         // Greater Heal / Heal / Lesser Heal
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_GROUP_CHAIN,  596u, 34861u, 15237u);        // Prayer of Healing / Circle of Healing / Holy Nova
                 break;
             }
             case CLASS_SHAMAN:
             {
-                outSpells[SLOT_PRIMARY_FILLER]    = ResolveKnownSpellId(bot, ctx, "lightning bolt");
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "lava burst");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "stormstrike");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "earth shock");
-                outSpells[SLOT_INTERRUPT_SPELL]   = ResolveKnownSpellId(bot, ctx, "wind shear");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "chain lightning");
-                outSpells[SLOT_DOT_MAINTENANCE]   = ResolveKnownSpellId(bot, ctx, "flame shock");
-                outSpells[SLOT_HEAL_FAST_INSTANT] = ResolveKnownSpellId(bot, ctx, "riptide");
-                if (!outSpells[SLOT_HEAL_FAST_INSTANT])
-                    outSpells[SLOT_HEAL_FAST_INSTANT] = ResolveKnownSpellId(bot, ctx, "lesser healing wave");
-                outSpells[SLOT_HEAL_BIG_DIRECT]   = ResolveKnownSpellId(bot, ctx, "healing wave");
-                outSpells[SLOT_HEAL_GROUP_CHAIN]  = ResolveKnownSpellId(bot, ctx, "chain heal");
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    403u, 60103u, 8042u);         // Lightning Bolt / Lava Lash / Earth Shock
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    51505u, 17364u, 421u);        // Lava Burst / Stormstrike / Chain Lightning
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  8042u, 8056u);                // Earth Shock / Frost Shock
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   57994u, 8042u);               // Wind Shear / Earth Shock
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         421u, 1535u, 8190u);          // Chain Lightning / Fire Nova / Magma Totem
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   8050u);                       // Flame Shock
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 324u, 52127u, 974u);          // Lightning Shield / Water Shield / Earth Shield
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    30823u, 5730u);               // Shamanistic Rage / Stoneclaw Totem
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_FAST_INSTANT, 61295u, 8004u);               // Riptide / Lesser Healing Wave
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_BIG_DIRECT,   331u, 8004u);                 // Healing Wave / Lesser Healing Wave
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_GROUP_CHAIN,  1064u);                       // Chain Heal
                 break;
             }
             case CLASS_WARRIOR:
             {
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "shield slam");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "mortal strike");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "bloodthirst");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "execute");
-                outSpells[SLOT_DEFENSIVE_BARRIER] = ResolveKnownSpellId(bot, ctx, "shield block");
-                outSpells[SLOT_INTERRUPT_SPELL]   = ResolveKnownSpellId(bot, ctx, "pummel");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "thunder clap");
-                outSpells[SLOT_EMERGENCY_SAVE]    = ResolveKnownSpellId(bot, ctx, "shield wall");
-                outSpells[SLOT_TAUNT_SPELL]       = ResolveKnownSpellId(bot, ctx, "taunt");
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    23922u, 12294u, 23881u);      // Shield Slam / Mortal Strike / Bloodthirst
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    6572u, 7384u, 78u);           // Revenge / Overpower / Heroic Strike
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  5308u, 34428u, 7384u);        // Execute / Victory Rush / Overpower
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 2565u, 2687u, 18499u);        // Shield Block / Bloodrage / Berserker Rage
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   6552u, 72u, 12809u);          // Pummel / Shield Bash / Concussion Blow
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         6343u, 1680u, 845u);          // Thunder Clap / Whirlwind / Cleave
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   772u);                        // Rend
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    871u, 12975u, 20230u);        // Shield Wall / Last Stand / Retaliation
+                SetSlotCandidates(bot, outSpells, SLOT_TAUNT_SPELL,       355u, 694u, 1161u);           // Taunt / Mocking Blow / Challenging Shout
                 break;
             }
             case CLASS_PALADIN:
             {
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "crusader strike");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "judgement of light");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "hammer of wrath");
-                outSpells[SLOT_INTERRUPT_SPELL]   = ResolveKnownSpellId(bot, ctx, "hammer of justice");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "consecration");
-                outSpells[SLOT_EMERGENCY_SAVE]    = ResolveKnownSpellId(bot, ctx, "divine shield");
-                outSpells[SLOT_HEAL_FAST_INSTANT] = ResolveKnownSpellId(bot, ctx, "flash of light");
-                outSpells[SLOT_HEAL_BIG_DIRECT]   = ResolveKnownSpellId(bot, ctx, "holy light");
-                outSpells[SLOT_TAUNT_SPELL]       = ResolveKnownSpellId(bot, ctx, "hand of reckoning");
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    35395u, 53595u, 26573u);      // Crusader Strike / Hammer of the Righteous / Consecration
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    20271u, 53408u, 879u);        // Judgement of Light / Judgement of Wisdom / Exorcism
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  24275u, 879u, 2812u);         // Hammer of Wrath / Exorcism / Holy Wrath
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 20925u, 53601u, 21084u);      // Holy Shield / Sacred Shield / Seal of Righteousness
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   853u, 31935u);                // Hammer of Justice / Avenger's Shield
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         53385u, 26573u, 2812u);       // Divine Storm / Consecration / Holy Wrath
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    642u, 633u, 498u);            // Divine Shield / Lay on Hands / Divine Protection
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_FAST_INSTANT, 20473u, 19750u);              // Holy Shock / Flash of Light
+                SetSlotCandidates(bot, outSpells, SLOT_HEAL_BIG_DIRECT,   635u, 19750u);                // Holy Light / Flash of Light
+                SetSlotCandidates(bot, outSpells, SLOT_TAUNT_SPELL,       62124u, 31789u);              // Hand of Reckoning / Righteous Defense
                 break;
             }
             case CLASS_ROGUE:
             {
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "sinister strike");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "eviscerate");
-                outSpells[SLOT_INTERRUPT_SPELL]   = ResolveKnownSpellId(bot, ctx, "kick");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "fan of knives");
-                outSpells[SLOT_EMERGENCY_SAVE]    = ResolveKnownSpellId(bot, ctx, "cloak of shadows");
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    1329u, 16511u, 1752u);        // Mutilate / Hemorrhage / Sinister Strike
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    1752u, 53u, 5938u);           // Sinister Strike / Backstab / Shiv
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  2098u, 32645u);               // Eviscerate / Envenom
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   1766u, 408u, 1776u);          // Kick / Kidney Shot / Gouge
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         51723u, 13877u);              // Fan of Knives / Blade Flurry
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   1943u, 703u);                 // Rupture / Garrote
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 5277u, 1966u);                // Evasion / Feint
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    31224u, 5277u, 1856u);        // Cloak of Shadows / Evasion / Vanish
                 break;
             }
             case CLASS_HUNTER:
             {
-                outSpells[SLOT_PRIMARY_FILLER]    = ResolveKnownSpellId(bot, ctx, "steady shot");
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "aimed shot");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "arcane shot");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "kill shot");
-                outSpells[SLOT_DOT_MAINTENANCE]   = ResolveKnownSpellId(bot, ctx, "serpent sting");
-                outSpells[SLOT_AOE_SPELL]         = ResolveKnownSpellId(bot, ctx, "multi-shot");
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    56641u, 3044u, 2973u);        // Steady Shot / Arcane Shot / Raptor Strike
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    19434u, 53209u, 53301u);      // Aimed Shot / Chimera Shot / Explosive Shot
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  53351u, 3044u, 1495u);        // Kill Shot / Arcane Shot / Mongoose Bite
+                SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   1978u, 3674u);                // Serpent Sting / Black Arrow
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         2643u, 1510u, 13813u);        // Multi-Shot / Volley / Explosive Trap
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   34490u, 19503u, 19386u);      // Silencing Shot / Scatter Shot / Wyvern Sting
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    19263u, 5384u, 781u);         // Deterrence / Feign Death / Disengage
                 break;
             }
             case CLASS_DEATH_KNIGHT:
             {
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "scourge strike");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "heart strike");
-                outSpells[SLOT_EXECUTE_FINISHER]  = ResolveKnownSpellId(bot, ctx, "death coil");
-                outSpells[SLOT_INTERRUPT_SPELL]   = ResolveKnownSpellId(bot, ctx, "mind freeze");
-                outSpells[SLOT_EMERGENCY_SAVE]    = ResolveKnownSpellId(bot, ctx, "icebound fortitude");
-                outSpells[SLOT_TAUNT_SPELL]       = ResolveKnownSpellId(bot, ctx, "dark command");
+                SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    49020u, 55090u, 55050u);      // Obliterate / Scourge Strike / Heart Strike
+                SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    45902u, 45477u, 45462u);      // Blood Strike / Icy Touch / Plague Strike
+                SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  47541u, 49143u, 56815u);      // Death Coil / Frost Strike / Rune Strike
+                SetSlotCandidates(bot, outSpells, SLOT_INTERRUPT_SPELL,   47528u, 47476u);              // Mind Freeze / Strangulate
+                SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         49184u, 48721u, 43265u);      // Howling Blast / Blood Boil / Death and Decay
+                SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 49222u, 57330u);              // Bone Shield / Horn of Winter
+                SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    48792u, 55233u, 48707u);      // Icebound Fortitude / Vampiric Blood / Anti-Magic Shell
+                SetSlotCandidates(bot, outSpells, SLOT_TAUNT_SPELL,       56222u, 49576u);              // Dark Command / Death Grip
                 break;
             }
             case CLASS_DRUID:
             {
-                outSpells[SLOT_PRIMARY_FILLER]    = ResolveKnownSpellId(bot, ctx, "wrath");
-                outSpells[SLOT_CORE_SIGNATURE]    = ResolveKnownSpellId(bot, ctx, "mangle (cat)");
-                if (!outSpells[SLOT_CORE_SIGNATURE])
-                    outSpells[SLOT_CORE_SIGNATURE] = ResolveKnownSpellId(bot, ctx, "starfire");
-                outSpells[SLOT_DOT_MAINTENANCE]   = ResolveKnownSpellId(bot, ctx, "moonfire");
-                outSpells[SLOT_DEFENSIVE_BARRIER] = ResolveKnownSpellId(bot, ctx, "barkskin");
-                outSpells[SLOT_HEAL_FAST_INSTANT] = ResolveKnownSpellId(bot, ctx, "rejuvenation");
-                outSpells[SLOT_HEAL_BIG_DIRECT]   = ResolveKnownSpellId(bot, ctx, "nourish");
-                outSpells[SLOT_HEAL_GROUP_CHAIN]  = ResolveKnownSpellId(bot, ctx, "wild growth");
-                outSpells[SLOT_TAUNT_SPELL]       = ResolveKnownSpellId(bot, ctx, "growl");
+                if (shapeshiftForm == FORM_BEAR || shapeshiftForm == FORM_DIREBEAR)
+                {
+                    SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    33878u, 33745u, 6807u);   // Mangle (Bear) / Lacerate / Maul
+                    SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    6807u, 779u, 16857u);     // Maul / Swipe (Bear) / Faerie Fire (Feral)
+                    SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         779u, 99u);               // Swipe (Bear) / Demoralizing Roar
+                    SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 22812u, 5229u);           // Barkskin / Enrage
+                    SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    61336u, 22842u, 22812u);  // Survival Instincts / Frenzied Regeneration / Barkskin
+                    SetSlotCandidates(bot, outSpells, SLOT_TAUNT_SPELL,       6795u, 5209u);            // Growl / Challenging Roar
+                }
+                else if (shapeshiftForm == FORM_CAT)
+                {
+                    SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    33876u, 5221u, 1082u);    // Mangle (Cat) / Shred / Claw
+                    SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    1082u, 1822u, 16857u);    // Claw / Rake / Faerie Fire (Feral)
+                    SetSlotCandidates(bot, outSpells, SLOT_EXECUTE_FINISHER,  22568u, 1079u);           // Ferocious Bite / Rip
+                    SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   1822u, 1079u);            // Rake / Rip
+                    SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         62078u);                  // Swipe (Cat)
+                    SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 22812u, 5217u);           // Barkskin / Tiger's Fury
+                    SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    61336u, 22812u);          // Survival Instincts / Barkskin
+                }
+                else
+                {
+                    SetSlotCandidates(bot, outSpells, SLOT_PRIMARY_FILLER,    5176u, 2912u);            // Wrath / Starfire
+                    SetSlotCandidates(bot, outSpells, SLOT_CORE_SIGNATURE,    2912u, 5176u);            // Starfire / Wrath
+                    SetSlotCandidates(bot, outSpells, SLOT_DOT_MAINTENANCE,   8921u, 5570u);            // Moonfire / Insect Swarm
+                    SetSlotCandidates(bot, outSpells, SLOT_AOE_SPELL,         48505u, 50516u, 16914u);  // Starfall / Typhoon / Hurricane
+                    SetSlotCandidates(bot, outSpells, SLOT_DEFENSIVE_BARRIER, 22812u, 467u);            // Barkskin / Thorns
+                    SetSlotCandidates(bot, outSpells, SLOT_EMERGENCY_SAVE,    22812u, 16689u);          // Barkskin / Nature's Grasp
+                    SetSlotCandidates(bot, outSpells, SLOT_HEAL_FAST_INSTANT, 774u, 33763u, 18562u);    // Rejuvenation / Lifebloom / Swiftmend
+                    SetSlotCandidates(bot, outSpells, SLOT_HEAL_BIG_DIRECT,   50464u, 8936u, 5185u);    // Nourish / Regrowth / Healing Touch
+                    SetSlotCandidates(bot, outSpells, SLOT_HEAL_GROUP_CHAIN,  48438u, 740u);            // Wild Growth / Tranquility
+                }
                 break;
             }
             default:
@@ -470,35 +532,160 @@ namespace JainaRustCombat
         }
     }
 
-    inline void PopulateClassSpellSlots(Player* bot, AiObjectContext* ctx, uint8_t classId, uint8_t specTab, CombatSnapshotPOD& snap)
+    inline bool IsSpellReadyAndCastableOnTarget(
+        Player* bot,
+        AiObjectContext* ctx,
+        uint32_t spellId,
+        Unit* target,
+        size_t slotIdx)
+    {
+        if (!spellId || !bot || !target || !target->IsInWorld() || !target->IsAlive())
+            return false;
+
+        if (bot->HasSpellCooldown(spellId))
+            return false;
+
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+        if (!spellInfo)
+            return false;
+
+        // Verificar coste de poder antes de instanciar Spell (Spell::Spell inicializa m_powerCost = 0 hasta Spell::prepare)
+        if (spellInfo->PowerType < MAX_POWERS)
+        {
+            Powers powerType = static_cast<Powers>(spellInfo->PowerType);
+            int32_t neededPower = spellInfo->CalcPowerCost(bot, spellInfo->GetSchoolMask());
+            if (static_cast<int32_t>(bot->GetPower(powerType)) < neededPower)
+                return false;
+        }
+
+        // Evitar encolar golpes de "siguiente ataque melee" (Heroic Strike, Maul, Cleave) si ya hay uno activo
+        if ((spellInfo->Attributes & (SPELL_ATTR0_ON_NEXT_SWING | SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE)) != 0)
+        {
+            if (bot->GetCurrentSpell(CURRENT_MELEE_SPELL) != nullptr)
+                return false;
+        }
+
+        // Si el bot se está moviendo, descartar hechizos con tiempo de casteo o canalizados
+        uint32_t castTime = !spellInfo->IsChanneled() ? spellInfo->CalcCastTime(bot) : spellInfo->GetDuration();
+        if ((castTime > 0 || spellInfo->IsAutoRepeatRangedSpell()) && bot->isMoving())
+            return false;
+
+        // Evitar lanzar AoE centrado en el lanzador (Thunder Clap, Consecration, Arcane Explosion, Swipe) lejos del enemigo
+        if ((slotIdx == SLOT_AOE_SPELL || slotIdx == SLOT_CORE_SIGNATURE) && spellInfo->GetMaxRange(false) <= 0.0f && bot != target && bot->GetDistance(target) > 8.5f)
+            return false;
+
+        if (bot != target && target->IsImmunedToSpell(spellInfo) && spellId != 44572)
+            return false;
+
+        ObjectGuid oldSel = bot->GetSelectedUnit() ? bot->GetSelectedUnit()->GetGUID() : ObjectGuid::Empty;
+        Spell* spell = new Spell(bot, spellInfo, TRIGGERED_NONE);
+        if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
+            spell->m_targets.SetDst(*target);
+        else if (spellInfo->Targets & TARGET_FLAG_SOURCE_LOCATION)
+            spell->m_targets.SetDst(*bot);
+        else
+            spell->m_targets.SetUnitTarget(target);
+
+        if (ctx)
+        {
+            if (Item* itemTarget = ctx->GetValue<Item*>("item for spell", spellId)->Get())
+                spell->m_targets.SetItemTarget(itemTarget);
+        }
+
+        SpellCastResult result = spell->CheckCast(true);
+        delete spell;
+        if (oldSel)
+            bot->SetSelection(oldSel);
+
+        return (result == SPELL_CAST_OK || result == SPELL_FAILED_NOT_INFRONT || result == SPELL_FAILED_UNIT_NOT_INFRONT);
+    }
+
+    inline void PopulateClassSpellSlots(
+        Player* bot,
+        AiObjectContext* ctx,
+        uint8_t classId,
+        uint8_t specTab,
+        Unit* enemyTarget,
+        Unit* lowestAllyUnit,
+        CombatSnapshotPOD& snap)
     {
         struct BotSpellCacheSlot
         {
-            uint64_t botGuid = 0;
-            uint8_t  level   = 0;
-            uint8_t  specTab = 0;
-            uint8_t  classId = 0;
-            uint32_t spellIds[SLOT_MAX]{};
+            uint64_t botGuid        = 0;
+            uint8_t  level          = 0;
+            uint8_t  specTab        = 0;
+            uint8_t  classId        = 0;
+            uint8_t  shapeshiftForm = 0;
+            uint32_t spellIds[SLOT_MAX][MAX_SLOT_CANDIDATES]{};
         };
 
+        uint8_t form = static_cast<uint8_t>(bot->GetShapeshiftForm());
         thread_local BotSpellCacheSlot spellCache[64]{};
         size_t idx = static_cast<size_t>(snap.bot_guid ^ (snap.bot_guid >> 17)) & 63u;
         BotSpellCacheSlot& entry = spellCache[idx];
 
-        if (entry.botGuid != snap.bot_guid || entry.level != snap.level || entry.specTab != specTab || entry.classId != classId)
+        if (entry.botGuid != snap.bot_guid || entry.level != snap.level ||
+            entry.specTab != specTab || entry.classId != classId || entry.shapeshiftForm != form)
         {
-            entry.botGuid = snap.bot_guid;
-            entry.level   = snap.level;
-            entry.specTab = specTab;
-            entry.classId = classId;
-            ResolveClassSpellBookIds(bot, ctx, classId, specTab, entry.spellIds);
+            entry.botGuid        = snap.bot_guid;
+            entry.level          = snap.level;
+            entry.specTab        = specTab;
+            entry.classId        = classId;
+            entry.shapeshiftForm = form;
+            ResolveClassSpellBookIds(bot, ctx, classId, specTab, form, entry.spellIds);
         }
+
+        bool anyKnownDotMissing = false;
+        bool anyKnownDotPresent = false;
 
         for (size_t s = 0; s < SLOT_MAX; ++s)
         {
-            uint32_t spellId = entry.spellIds[s];
-            snap.ready_spells[s] = (spellId && !bot->HasSpellCooldown(spellId)) ? spellId : 0u;
+            Unit* slotTarget = enemyTarget;
+            if (s == SLOT_BURST_COOLDOWN || s == SLOT_SUMMON_OR_MIRROR ||
+                s == SLOT_DEFENSIVE_BARRIER || s == SLOT_EMERGENCY_SAVE)
+            {
+                slotTarget = bot;
+            }
+            else if (s == SLOT_HEAL_FAST_INSTANT || s == SLOT_HEAL_BIG_DIRECT || s == SLOT_HEAL_GROUP_CHAIN)
+            {
+                slotTarget = lowestAllyUnit;
+            }
+
+            uint32_t chosenSpell = 0;
+            for (size_t c = 0; c < MAX_SLOT_CANDIDATES; ++c)
+            {
+                uint32_t candId = entry.spellIds[s][c];
+                if (!candId)
+                    continue;
+
+                if (s == SLOT_DEFENSIVE_BARRIER && bot->HasAura(candId))
+                {
+                    if (classId == CLASS_MAGE)
+                        snap.has_ice_barrier = 1;
+                    continue;
+                }
+
+                if (s == SLOT_DOT_MAINTENANCE && enemyTarget)
+                {
+                    if (enemyTarget->HasAura(candId, bot->GetGUID()))
+                    {
+                        anyKnownDotPresent = true;
+                        continue;
+                    }
+                    anyKnownDotMissing = true;
+                }
+
+                if (slotTarget && IsSpellReadyAndCastableOnTarget(bot, ctx, candId, slotTarget, s))
+                {
+                    chosenSpell = candId;
+                    break;
+                }
+            }
+            snap.ready_spells[s] = chosenSpell;
         }
+
+        if (anyKnownDotPresent && !anyKnownDotMissing)
+            snap.has_target_dot = 1;
     }
 
     inline bool BuildCombatSnapshot(PlayerbotAI* botAI, AiObjectContext* ctx, CombatSnapshotPOD& snap)
@@ -507,7 +694,7 @@ namespace JainaRustCombat
             return false;
 
         Player* bot = botAI->GetBot();
-        if (!bot || !bot->IsInWorld() || !bot->IsAlive() || !bot->IsInCombat())
+        if (!bot || !bot->IsInWorld() || !bot->IsAlive() || (botAI->GetState() != BOT_STATE_COMBAT && !bot->IsInCombat()))
             return false;
 
         std::memset(&snap, 0, sizeof(CombatSnapshotPOD));
@@ -534,12 +721,14 @@ namespace JainaRustCombat
         if (!target || !target->IsInWorld() || !target->IsAlive() || target->IsFriendlyTo(bot))
             target = bot->GetVictim();
         if (!target || !target->IsInWorld() || !target->IsAlive() || target->IsFriendlyTo(bot))
+            target = ctx->GetValue<Unit*>(PlayerbotAI::IsTank(bot) ? "tank target" : "dps target")->Get();
+        if (!target || !target->IsInWorld() || !target->IsAlive() || target->IsFriendlyTo(bot))
         {
             if (!bot->getAttackers().empty())
                 target = *bot->getAttackers().begin();
         }
 
-        bool isPvP = bot->InBattleground() || bot->InArena() || (target && target->IsPlayer());
+        bool isPvP = bot->InBattleground() || bot->InArena();
         snap.is_pve             = isPvP ? 0 : 1;
         snap.is_moving          = bot->isMoving() ? 1 : 0;
         snap.is_casting         = (bot->HasUnitState(UNIT_STATE_CASTING) || bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr) ? 1 : 0;
@@ -554,12 +743,18 @@ namespace JainaRustCombat
             attackerCount = 1;
         snap.active_enemy_count = attackerCount;
 
+        Unit* lowestAllyUnit = bot;
+        snap.lowest_ally_guid       = snap.bot_guid;
+        snap.lowest_ally_hp_pct     = snap.bot_hp_pct;
+        snap.lowest_ally_missing_hp = (bot->GetMaxHealth() > bot->GetHealth()) ? (bot->GetMaxHealth() - bot->GetHealth()) : 0;
+        snap.injured_ally_count     = (snap.bot_hp_pct < 92.0f) ? 1 : 0;
+
         if (Group* grp = bot->GetGroup())
         {
             snap.group_guid = grp->GetGUID().GetRawValue();
             uint8_t injuredCount = 0;
             float lowestPct = 100.0f;
-            uint64_t lowestGuid = 0;
+            uint64_t lowestGuid = snap.bot_guid;
             uint32_t lowestMissing = 0;
 
             for (GroupReference* ref = grp->GetFirstMember(); ref; ref = ref->next())
@@ -573,10 +768,11 @@ namespace JainaRustCombat
                 float hpPct = member->GetHealthPct();
                 if (hpPct < 92.0f)
                     ++injuredCount;
-                if (hpPct < lowestPct)
+                if (hpPct < lowestPct || !lowestAllyUnit)
                 {
                     lowestPct = hpPct;
                     lowestGuid = member->GetGUID().GetRawValue();
+                    lowestAllyUnit = member;
                     lowestMissing = (member->GetMaxHealth() > member->GetHealth()) ? (member->GetMaxHealth() - member->GetHealth()) : 0;
                 }
             }
@@ -627,7 +823,7 @@ namespace JainaRustCombat
             snap.has_target_dot          = (target && (target->HasAura(44457) || target->HasAura(55360))) ? 1 : 0;
         }
 
-        PopulateClassSpellSlots(bot, ctx, snap.class_id, snap.spec_id, snap);
+        PopulateClassSpellSlots(bot, ctx, snap.class_id, snap.spec_id, target, lowestAllyUnit, snap);
         return true;
     }
 
@@ -663,6 +859,7 @@ namespace JainaRustCombat
         int32_t rc = GetState().fnEvaluate(&snap, bb, &dec);
         auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
         GetState().totalLatencyNs.fetch_add(static_cast<uint64_t>(ns > 0 ? ns : 0), std::memory_order_relaxed);
+        uint64_t evals = GetState().totalEvaluations.fetch_add(1, std::memory_order_relaxed) + 1;
 
         if (rc != 1 || dec.spell_id == 0 || dec.target_guid == 0)
             return false;
@@ -685,10 +882,10 @@ namespace JainaRustCombat
         {
             uint64_t execs = GetState().activeExecutions.fetch_add(1, std::memory_order_relaxed) + 1;
             uint32_t sampleRate = sPlayerbotAIConfig.rustCombatShadowSampleRate ? sPlayerbotAIConfig.rustCombatShadowSampleRate : 200;
-            if (execs % sampleRate == 0)
+            if (execs <= 5 || execs % sampleRate == 0)
             {
                 uint64_t totalNs = GetState().totalLatencyNs.load(std::memory_order_relaxed);
-                double avgUs = execs > 0 ? (static_cast<double>(totalNs) / static_cast<double>(execs)) / 1000.0 : 0.0;
+                double avgUs = evals > 0 ? (static_cast<double>(totalNs) / static_cast<double>(evals)) / 1000.0 : 0.0;
                 LOG_INFO("server.loading",
                     "[jAInaCore-RustCombat][ACTIVE] Executions={} AvgLatency={:.3f}us | Bot={} Class={} SpellId={} Category={} Slot={}",
                     execs,
@@ -704,9 +901,9 @@ namespace JainaRustCombat
         return false;
     }
 
-    /// Acción nativa de `mod-playerbots` (R2 y Sección 3.10): se encola con relevancia `ACTION_MOVE - 1.0f` (`29.0f`)
+    /// Acción nativa de `mod-playerbots` (R2 y Sección 3.10): se encola con relevancia `ACTION_MOVE - 0.5f` (`29.5f`)
     /// para evaluarse dentro del bucle `while` de `Engine::DoNextAction`, respetando todos los `Multipliers` y todas
-    /// las acciones `>= 30.0f` (Emergencias 90, BossAI 60, Dispel 50, Interrupciones 40, Movimiento 30).
+    /// las acciones `>= 30.0f` (Emergencias 90, BossAI 60, Assist 50, Dispel 50, Interrupciones 40, Movimiento 30).
     class RustCombatAction : public Action
     {
     public:
@@ -714,14 +911,17 @@ namespace JainaRustCombat
 
         bool isUseful() override
         {
-            return botAI && botAI->GetState() == BOT_STATE_COMBAT &&
-                   IsBotControlledByRust(botAI->GetBot(), sPlayerbotAIConfig.rustCombatMode);
+            Player* bot = botAI ? botAI->GetBot() : nullptr;
+            return bot && botAI->GetState() == BOT_STATE_COMBAT &&
+                   !bot->InBattleground() && !bot->InArena() &&
+                   IsBotControlledByRust(bot, sPlayerbotAIConfig.rustCombatMode);
         }
 
         bool isPossible() override
         {
             Player* bot = botAI ? botAI->GetBot() : nullptr;
-            return bot && bot->IsAlive() && bot->IsInWorld() && bot->IsInCombat() &&
+            return bot && bot->IsAlive() && bot->IsInWorld() &&
+                   (botAI->GetState() == BOT_STATE_COMBAT || bot->IsInCombat()) &&
                    (!bot->GetSession() || !bot->GetSession()->IsLoggingOut()) &&
                    !bot->HasUnitState(UNIT_STATE_CASTING) &&
                    bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) == nullptr;

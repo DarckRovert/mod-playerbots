@@ -526,7 +526,7 @@ void Engine::PushDefaultActions()
     if (botAI && botAI->GetState() == BOT_STATE_COMBAT && sPlayerbotAIConfig.rustCombatMode >= 2)
     {
         Event emptyEvent;
-        MultiplyAndPush({ NextAction("rust combat core", ACTION_HIGH - 0.1f) }, 0.0f, false, emptyEvent, "default");
+        MultiplyAndPush({ NextAction("rust combat core", ACTION_MOVE - 0.5f) }, 0.0f, false, emptyEvent, "default");
     }
 
     for (std::map<std::string, Strategy*>::iterator i = strategies.begin(); i != strategies.end(); i++)
