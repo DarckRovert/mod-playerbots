@@ -980,6 +980,10 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 
     ParseLevelMgrExcludeNames(sConfigMgr->GetOption<std::string>("AiPlayerbot.ResetBotLevel.ExcludeNames", ""),
         resetBotLevelExcludeNames);
+
+    // Project Jaina L9: Rust Combat Core runtime-reloadable configuration (default 0 = Disabled)
+    rustCombatMode = sConfigMgr->GetOption<uint32>("AiPlayerbot.RustCombat.Mode", 0);
+    rustCombatShadowSampleRate = sConfigMgr->GetOption<uint32>("AiPlayerbot.RustCombat.ShadowSampleRate", 200);
 }
 
 bool PlayerbotAIConfig::IsInRandomAccountList(uint32 id)

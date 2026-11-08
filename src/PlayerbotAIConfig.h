@@ -543,6 +543,10 @@ public:
     bool resetBotLevelIgnoreGuildWithRealPlayers;
     std::vector<std::string> resetBotLevelExcludeNames;
 
+    // Project Jaina L9: Rust Combat Core integration (0 = Disabled, 1 = Shadow Mode, 2 = Pilot Mage PvE, 3 = All Specs PvE)
+    uint32 rustCombatMode = 0;
+    uint32 rustCombatShadowSampleRate = 200;
+
 private:
     PlayerbotAIConfig() = default;
     ~PlayerbotAIConfig() = default;

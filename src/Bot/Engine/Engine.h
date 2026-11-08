@@ -118,6 +118,7 @@ protected:
     uint32 strategyTypeMask;
     bool hasTargetExclusions = false;
     NamedObjectFactoryList<ActionNode> actionNodeFactories;
+    Action* rustCombatAction = nullptr;
 };
 
 #endif

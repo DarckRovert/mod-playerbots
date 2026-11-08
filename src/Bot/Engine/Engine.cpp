@@ -10,6 +10,7 @@
 #include "PerfMonitor.h"
 #include "Playerbots.h"
 #include "Queue.h"
+#include "RustCombatBridge.h"
 #include "Strategy.h"
 #include "Timer.h"
 
@@ -73,6 +74,8 @@ ActionExecutionListeners::~ActionExecutionListeners()
 Engine::~Engine(void)
 {
     Reset();
+    delete rustCombatAction;
+    rustCombatAction = nullptr;
 
     // for (std::map<std::string, Strategy*>::iterator i = strategies.begin(); i != strategies.end(); i++)
     // {
@@ -227,6 +230,11 @@ bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
 
                 if (actionExecuted)
                 {
+                    if (!minimal && sPlayerbotAIConfig.rustCombatMode == 1 && relevance < ACTION_HIGH && botAI &&
+                        botAI->GetState() == BOT_STATE_COMBAT)
+                    {
+                        JainaRustCombat::ObserveShadowDecision(botAI, aiObjectContext, action);
+                    }
                     LogAction("A:%s - OK", action->getName().c_str());
                     MultiplyAndPush(actionNode->getContinuers(), relevance, false, event, "cont");
                     lastRelevance = relevance;
@@ -515,6 +523,12 @@ void Engine::ProcessTriggers(bool minimal)
 
 void Engine::PushDefaultActions()
 {
+    if (botAI && botAI->GetState() == BOT_STATE_COMBAT && sPlayerbotAIConfig.rustCombatMode >= 2)
+    {
+        Event emptyEvent;
+        MultiplyAndPush({ NextAction("rust combat core", ACTION_HIGH - 0.1f) }, 0.0f, false, emptyEvent, "default");
+    }
+
     for (std::map<std::string, Strategy*>::iterator i = strategies.begin(); i != strategies.end(); i++)
     {
         Strategy* strategy = i->second;
@@ -574,7 +588,16 @@ Action* Engine::InitializeAction(ActionNode* actionNode)
     Action* action = actionNode->getAction();
     if (!action)
     {
-        action = aiObjectContext->GetAction(actionNode->getName());
+        if (actionNode->getName() == "rust combat core")
+        {
+            if (!rustCombatAction)
+                rustCombatAction = new JainaRustCombat::RustCombatAction(botAI);
+            action = rustCombatAction;
+        }
+        else
+        {
+            action = aiObjectContext->GetAction(actionNode->getName());
+        }
         actionNode->setAction(action);
     }
 
