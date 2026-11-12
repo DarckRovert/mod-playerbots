@@ -108,7 +108,7 @@ namespace JainaRustCombat
         uint8_t  active_enemy_count;
         uint8_t  injured_ally_count;
         uint8_t  tank_needs_swap;
-        uint8_t  _pad0;
+        uint8_t  has_defensive_barrier;
         uint32_t ready_spells[16];
         uint64_t lowest_ally_guid;
         float    lowest_ally_hp_pct;
@@ -662,6 +662,7 @@ namespace JainaRustCombat
                 {
                     if (classId == CLASS_MAGE)
                         snap.has_ice_barrier = 1;
+                    snap.has_defensive_barrier = 1;
                     continue;
                 }
 
