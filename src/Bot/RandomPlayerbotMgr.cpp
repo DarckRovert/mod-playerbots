@@ -562,6 +562,12 @@ void RandomPlayerbotMgr::AssignAccountTypes()
 
         // Calculate base accounts needed for RNDbots, ensuring round up for maxBots not cleanly divisible by the divisor
         neededRndBotAccounts = (maxBots + divisor - 1) / divisor;
+
+        // Respect explicitly configured AiPlayerbot.RandomBotAccountCount
+        if (sPlayerbotAIConfig.randomBotAccountCount > static_cast<int32>(neededRndBotAccounts))
+        {
+            neededRndBotAccounts = static_cast<uint32>(sPlayerbotAIConfig.randomBotAccountCount);
+        }
     }
 
     // Count existing assigned accounts
