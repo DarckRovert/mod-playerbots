@@ -391,8 +391,10 @@ void PlayerbotHolder::LogoutAllBots()
             continue;
 
         // Project Jaina Anti-Despawn: Do not log out RandomBots or persistent world HeroBots/EliteSquad
-        // registered in sRandomPlayerbotMgr. Release them back into the world (roaming) so they remain active.
-        if (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.GetPlayerBot(bot->GetGUID()) != nullptr)
+        // when a human master's PlayerbotMgr logs out; allow sRandomPlayerbotMgr itself (e.g., shutdown)
+        // to save and log out bots cleanly.
+        if (this != &sRandomPlayerbotMgr &&
+            (sRandomPlayerbotMgr.IsRandomBot(bot) || sRandomPlayerbotMgr.GetPlayerBot(bot->GetGUID()) != nullptr))
         {
             botAI->SetMaster(nullptr);
             botAI->ResetStrategies(false);
@@ -465,13 +467,14 @@ void PlayerbotHolder::LogoutPlayerBot(ObjectGuid guid)
         if (!sRandomPlayerbotMgr.IsRandomBot(bot) && bot->isTaxiCheater())
             bot->SetTaxiCheater(false);
 
-        bot->SaveToDB(false, false);
-
         WorldSession* botWorldSessionPtr = bot->GetSession();
         [[maybe_unused]] WorldSession* masterWorldSessionPtr = nullptr;     // Remove [[maybe_unused]] tag if timed logout implemented.
 
         if (botWorldSessionPtr->IsLoggingOut())
+        {
+            bot->SaveToDB(false, false);
             return;
+        }
 
         Player* master = botAI->GetMaster();
         if (master)
