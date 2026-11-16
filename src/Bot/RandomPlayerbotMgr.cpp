@@ -43,11 +43,13 @@
 #include "WorldSessionMgr.h"
 #include <algorithm>
 #include <boost/thread/thread.hpp>
+#include <cctype>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <random>
 #include <set>
+#include <unordered_set>
 #include <utility>
 
 struct GuidClassRaceInfo
@@ -500,25 +502,35 @@ void RandomPlayerbotMgr::AssignAccountTypes()
     rndBotTypeAccounts.clear();
     addClassTypeAccounts.clear();
 
-    // First, get ALL randombot accounts from the database
+    // First, get ALL numerical randombot accounts from the database (exclude HeroBots/Elite prefixed accounts)
     std::vector<uint32> allRandomBotAccounts;
+    std::unordered_set<uint32> validRandomAccountSet;
     QueryResult allAccounts = LoginDatabase.Query(
-        "SELECT id FROM account WHERE username LIKE '{}%%' ORDER BY id",
+        "SELECT id, username FROM account WHERE username LIKE '{}%%' ORDER BY id",
         sPlayerbotAIConfig.randomBotAccountPrefix.c_str());
 
+    std::string const prefix = sPlayerbotAIConfig.randomBotAccountPrefix;
     if (allAccounts)
     {
         do
         {
             Field* fields = allAccounts->Fetch();
             uint32 accountId = fields[0].Get<uint32>();
+            std::string username = fields[1].Get<std::string>();
+            if (username.size() <= prefix.size())
+                continue;
+            std::string suffix = username.substr(prefix.size());
+            bool numericSuffix = !suffix.empty() && std::all_of(suffix.begin(), suffix.end(), [](unsigned char c) { return std::isdigit(c); });
+            if (!numericSuffix)
+                continue;
             allRandomBotAccounts.push_back(accountId);
+            validRandomAccountSet.insert(accountId);
         } while (allAccounts->NextRow());
     }
 
     LOG_INFO("playerbots", "Found {} total randombot accounts in database", allRandomBotAccounts.size());
 
-    // Check existing assignments
+    // Check existing assignments (restricted to valid numerical randombot accounts)
     PlayerbotsDatabasePreparedStatement* assignmentsStmt = PlayerbotsDatabase.GetPreparedStatement(PLAYERBOTS_SEL_ACCOUNT_TYPE);
     PreparedQueryResult existingAssignments = PlayerbotsDatabase.Query(assignmentsStmt);
     std::map<uint32, uint8> currentAssignments;
@@ -530,7 +542,8 @@ void RandomPlayerbotMgr::AssignAccountTypes()
             Field* fields = existingAssignments->Fetch();
             uint32 accountId = fields[0].Get<uint32>();
             uint8 accountType = fields[1].Get<uint8>();
-            currentAssignments[accountId] = accountType;
+            if (validRandomAccountSet.count(accountId))
+                currentAssignments[accountId] = accountType;
         } while (existingAssignments->NextRow());
     }
 
@@ -1543,6 +1556,9 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
     {
         idleBot = true;
     }
+
+    if (!IsRandomBot(bot))
+        return false;
 
     if (idleBot)
     {

@@ -142,13 +142,15 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
         std::transform(lowerAcc.begin(), lowerAcc.end(), lowerAcc.begin(), ::tolower);
         std::string lowerPrefix = sPlayerbotAIConfig.randomBotAccountPrefix;
         std::transform(lowerPrefix.begin(), lowerPrefix.end(), lowerPrefix.begin(), ::tolower);
-        if (!lowerPrefix.empty() && lowerAcc.rfind(lowerPrefix, 0) == 0)
+        if ((!lowerPrefix.empty() && lowerAcc.rfind(lowerPrefix, 0) == 0) ||
+            lowerAcc.rfind("rndbot_hero_", 0) == 0 ||
+            lowerAcc.rfind("rndbot_elite_", 0) == 0)
         {
             isBotAccount = true;
         }
     }
     bool isRandomBotAccount = sPlayerbotAIConfig.IsInRandomAccountList(accountId);
-    bool isHeroOrCompanion = isBotAccount || isRandomBotAccount || (accountId == 102);
+    bool isHeroOrCompanion = isBotAccount || isRandomBotAccount;
     bool isGm = masterPlayer && masterPlayer->CanBeGameMaster();
 
     bool allowed = true;
