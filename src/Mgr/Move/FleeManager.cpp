@@ -27,6 +27,8 @@ void FleeManager::calculateDistanceToCreatures(FleePoint* point)
         return;
     }
     GuidVector units = *botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets no los");
+    bool const isInstance = (bot->GetMap() && (bot->GetMap()->IsDungeon() || bot->GetMap()->IsRaid()));
+
     for (GuidVector::iterator i = units.begin(); i != units.end(); ++i)
     {
         Unit* unit = botAI->GetUnit(*i);
@@ -34,9 +36,42 @@ void FleeManager::calculateDistanceToCreatures(FleePoint* point)
             continue;
 
         float d = ServerFacade::instance().GetDistance2d(unit, point->x, point->y);
+        if (isInstance && !unit->IsInCombat() && unit->IsHostileTo(bot))
+        {
+            // Never flee toward unengaged dungeon/raid packs (anti-bodypull)
+            Creature* creature = unit->ToCreature();
+            float aggroDist = creature ? creature->GetAttackDistance(bot) : 20.0f;
+            if (d < aggroDist + 5.0f)
+            {
+                point->sumDistance = -10000.0f;
+                point->minDistance = 0.0f;
+                return;
+            }
+            continue;
+        }
         point->sumDistance += d;
         if (point->minDistance < 0 || point->minDistance > d)
             point->minDistance = d;
+    }
+
+    if (isInstance)
+    {
+        if (Group* grp = bot->GetGroup())
+        {
+            for (GroupReference* ref = grp->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (!member || member == bot || !member->IsAlive() || member->GetMapId() != bot->GetMapId())
+                    continue;
+                if (botAI->IsTank(member) || IsRealPlayer(member))
+                {
+                    float dAlly = ServerFacade::instance().GetDistance2d(member, point->x, point->y);
+                    if (dAlly > sPlayerbotAIConfig.healDistance * 0.85f)
+                        point->sumDistance -= (dAlly - sPlayerbotAIConfig.healDistance * 0.85f) * 2.0f;
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -93,7 +128,7 @@ void FleeManager::calculatePossibleDestinations(std::vector<FleePoint*>& points)
                 if (intersectsOri(angle, enemyOri, angleIncrement))
                     continue;
 
-                float x = botPosX + cos(angle) * maxAllowedDistance, y = botPosY + sin(angle) * maxAllowedDistance,
+                float x = botPosX + cos(angle) * dist, y = botPosY + sin(angle) * dist,
                       z = botPosZ + CONTACT_DISTANCE;
                 if (forceMaxDistance &&
                     ServerFacade::instance().IsDistanceLessThan(ServerFacade::instance().GetDistance2d(bot, x, y),

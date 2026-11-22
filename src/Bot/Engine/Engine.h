@@ -94,6 +94,8 @@ public:
 private:
     bool MultiplyAndPush(std::vector<NextAction> actions, float forceRelevance, bool skipPrerequisites, Event event,
                          char const* pushType);
+    bool addStrategyInternal(std::string const& name);
+    bool removeStrategyInternal(std::string const& name);
     void Reset();
     void ProcessTriggers(bool minimal);
     void PushDefaultActions();
@@ -118,7 +120,8 @@ protected:
     uint32 strategyTypeMask;
     bool hasTargetExclusions = false;
     NamedObjectFactoryList<ActionNode> actionNodeFactories;
-    Action* rustCombatAction = nullptr;
+    Action* rustTacticalAction = nullptr;
+    Action* rustRotationAction = nullptr;
 };
 
 #endif

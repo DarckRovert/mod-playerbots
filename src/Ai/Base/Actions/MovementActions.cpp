@@ -1883,7 +1883,7 @@ bool AvoidAoeAction::HasHostileDynamicObjectDanger()
     if (!sPlayerbotAIConfig.enableSpatialDangerAvoidance)
         return false;
 
-    float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
+    float const maxAvoidRadius = sPlayerbotAIConfig.maxAoeAvoidRadius;
     std::list<WorldObject*> objs;
     float scanRadius = maxAvoidRadius + 2.0f;
     Acore::AllWorldObjectsInRange check(bot, scanRadius);
@@ -1929,7 +1929,7 @@ bool AvoidAoeAction::AvoidHostileDynamicObjects()
     if (!sPlayerbotAIConfig.enableSpatialDangerAvoidance)
         return false;
 
-    float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
+    float const maxAvoidRadius = sPlayerbotAIConfig.maxAoeAvoidRadius;
     std::list<WorldObject*> objs;
     float scanRadius = maxAvoidRadius + 2.0f;
     Acore::AllWorldObjectsInRange check(bot, scanRadius);
@@ -1975,7 +1975,7 @@ bool AvoidAoeAction::AvoidHostileDynamicObjects()
                     lastTellTimer = time(NULL);
                     lastMoveTimer = getMSTime();
                     std::ostringstream out;
-                    out << "I'm avoiding " << name.str() << " (" << spellInfo->Id << ") Radius " << radius << " - [Dynamic Hazard]";
+                    out << "[Peligro AoE] Esquivando " << name.str() << " (" << spellInfo->Id << ") radio " << radius << "m";
                     bot->Say(out.str(), LANG_UNIVERSAL);
                 }
                 lastMoveTimer = getMSTime();
@@ -2041,7 +2041,7 @@ bool AvoidAoeAction::AvoidAuraWithDynamicObj()
     {
         return false;
     }
-    float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
+    float const maxAvoidRadius = sPlayerbotAIConfig.maxAoeAvoidRadius;
     float radius = dynOwner->GetRadius();
     if (radius <= 0.0f)
         radius = 8.0f;
@@ -2111,7 +2111,7 @@ bool AvoidAoeAction::AvoidGameObjectWithDamage()
             continue;
         }
 
-        float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
+        float const maxAvoidRadius = sPlayerbotAIConfig.maxAoeAvoidRadius;
         float radius = (float)goInfo->trap.diameter / 2 + go->GetCombatReach();
         if (radius <= 0.0f)
             radius = 8.0f;
@@ -2182,7 +2182,7 @@ bool AvoidAoeAction::AvoidUnitWithDamageAura()
                 {
                     if (triggerSpellInfo->Effects[j].Effect == SPELL_EFFECT_SCHOOL_DAMAGE)
                     {
-                        float const maxAvoidRadius = std::max(sPlayerbotAIConfig.maxAoeAvoidRadius, 30.0f);
+                        float const maxAvoidRadius = sPlayerbotAIConfig.maxAoeAvoidRadius;
                         float radius = triggerSpellInfo->Effects[j].CalcRadius();
                         if (radius <= 0.0f)
                             radius = 8.0f;

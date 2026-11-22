@@ -446,6 +446,8 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         }
     }
 
+    UpdateStuckWatchdog(elapsed);
+
     // Update the bot's group status (moved to helper function)
     UpdateAIGroupMaster();
 
@@ -6264,6 +6266,82 @@ bool PlayerbotAI::CanMove()
 bool PlayerbotAI::HasTacticalMovementLock() const
 {
     return tacticalMovementLockEnd > getMSTime();
+}
+
+void PlayerbotAI::UpdateStuckWatchdog(uint32 elapsed)
+{
+    if (!bot || !bot->IsAlive() || !bot->GetMap() || bot->IsSitState() || bot->IsInFlight() ||
+        bot->GetTransport() || bot->GetVehicle() || HasTacticalMovementLock() ||
+        bot->HasUnitState(UNIT_STATE_LOST_CONTROL | UNIT_STATE_CASTING) ||
+        bot->IsRooted() || bot->isFrozen() || bot->IsPolymorphed() ||
+        HasStrategy("stay", BOT_STATE_NON_COMBAT) || HasStrategy("passive", BOT_STATE_NON_COMBAT))
+    {
+        stuckElapsedMs = 0;
+        stuckSidestepTried = false;
+        stuckWatchPos = WorldPosition(bot);
+        return;
+    }
+
+    MovementGeneratorType const moveType = bot->GetMotionMaster()->GetCurrentMovementGeneratorType();
+    if (moveType != FOLLOW_MOTION_TYPE && moveType != POINT_MOTION_TYPE && moveType != CHASE_MOTION_TYPE)
+    {
+        stuckElapsedMs = 0;
+        stuckSidestepTried = false;
+        stuckWatchPos = WorldPosition(bot);
+        return;
+    }
+
+    if (!stuckWatchPos || bot->GetExactDist2d(stuckWatchPos.GetPositionX(), stuckWatchPos.GetPositionY()) >= 1.5f)
+    {
+        stuckWatchPos = WorldPosition(bot);
+        stuckElapsedMs = 0;
+        stuckSidestepTried = false;
+        return;
+    }
+
+    stuckElapsedMs += elapsed;
+
+    // Step 1 (4.0s stuck): Perpendicular 4y sidestep via collision check to clear pillars/doors
+    if (stuckElapsedMs >= 4000 && !stuckSidestepTried)
+    {
+        stuckSidestepTried = true;
+        float const angle = bot->GetOrientation() + (urand(0, 1) ? static_cast<float>(M_PI_2) : -static_cast<float>(M_PI_2));
+        float tx = bot->GetPositionX() + std::cos(angle) * 4.0f;
+        float ty = bot->GetPositionY() + std::sin(angle) * 4.0f;
+        float tz = bot->GetPositionZ();
+        bot->UpdateAllowedPositionZ(tx, ty, tz);
+        bot->GetMotionMaster()->Clear();
+        bot->GetMotionMaster()->MovePoint(bot->GetMapId(), tx, ty, tz, FORCED_MOVEMENT_NONE, true);
+        return;
+    }
+
+    // Step 2 (7.5s stuck in PvE group follow): clean micro-rescue behind group leader within 60y
+    if (stuckElapsedMs >= 7500 && !bot->InBattleground() && !bot->InArena())
+    {
+        stuckElapsedMs = 0;
+        stuckSidestepTried = false;
+        if (Player* leader = GetGroupLeader())
+        {
+            if (leader != bot && leader->IsInWorld() && leader->IsAlive() &&
+                !leader->HasUnitState(UNIT_STATE_IN_FLIGHT) && leader->GetMapId() == bot->GetMapId())
+            {
+                float const distLeader = bot->GetExactDist2d(leader);
+                if (distLeader > sPlayerbotAIConfig.followDistance + 2.0f && distLeader <= 60.0f)
+                {
+                    float const lo = leader->GetOrientation();
+                    float tx = leader->GetPositionX() - std::cos(lo) * 2.0f;
+                    float ty = leader->GetPositionY() - std::sin(lo) * 2.0f;
+                    float tz = leader->GetPositionZ();
+                    leader->GetMap()->CheckCollisionAndGetValidCoords(
+                        leader, leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), tx, ty, tz);
+                    bot->StopMoving();
+                    bot->GetMotionMaster()->Clear();
+                    bot->NearTeleportTo(tx, ty, tz, lo);
+                    stuckWatchPos = WorldPosition(bot);
+                }
+            }
+        }
+    }
 }
 
 void PlayerbotAI::SetTacticalMovementLock(uint32 durationMs)

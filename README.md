@@ -39,6 +39,7 @@
 - **Tank Auto-Pull Strategy:** Autonomous pull routines (`AutoPullAction`, `AutoPullStrategy`) with backward-compatible aliases.
 - **Shortcuts & Role Recruitment:** Direct `.bot` / `.playerbot` commands supporting `role recruit` (Tank, Healer, DPS) and `raid` (5-man, 10-man, 25-man).
 - **Relentless Dueling Engine & Caster Pet Integration (Hito #275):** Immediate transition to `BOT_STATE_COMBAT` upon duel countdown completion (`DuelActiveTrigger`), instant dismount, facing, offensive engagement via `AttackDuelOpponentAction`, complete same-faction duel exemption in target selectors, and proactive minion engagement for ranged spellcasters.
+- **Cognitive Architecture v2.0 & Rust ABI v3 Bridge (Hito #388 / v6.5.0):** Idempotent batched `ChangeStrategy` in `Engine.cpp`, unengaged pack avoidance and fixed radial guard in `FleeManager.cpp`, uncapped AoE vectoring in `MovementActions.cpp`, Option A realistic combat resources with inventory-first drink/eat (`NonCombatActions.cpp`, falling back to `BotCheatMask::food` only on empty bags), wipe-recovery auto-release (`ReleaseSpiritAction.cpp`), `GREED` / Rare+ human courtesy (`LootRollAction.cpp`), `UpdateStuckWatchdog` (`PlayerbotAI.cpp`), and dual-priority O(1) `Lazy-CheckCast` bridge (`RustCombatBridge.h` ABI `0x00010003`: `29.5f` tactical / `19.5f` rotation preserving C++ `ACTION_HIGH 20.0f`).
 
 ---
 

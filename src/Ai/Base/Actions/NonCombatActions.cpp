@@ -35,6 +35,9 @@ bool IsDisallowedShapeshiftForm(Player* bot)
 
 bool DrinkAction::Execute(Event event)
 {
+    if (UseItemAction::isPossible() && UseItemAction::Execute(event))
+        return true;
+
     if (botAI->HasCheat(BotCheatMask::food))
     {
         // if (bot->IsNonMeleeSpellCast(true))
@@ -83,8 +86,9 @@ bool DrinkAction::isUseful()
             return false;
     }
 
+    uint8 const drinkThreshold = PlayerbotAI::IsHeal(bot) ? 75 : 65;
     return UseItemAction::isUseful() && AI_VALUE2(bool, "has mana", "self target") &&
-           AI_VALUE2(uint8, "mana", "self target") < 100;
+           AI_VALUE2(uint8, "mana", "self target") < drinkThreshold;
 }
 
 bool DrinkAction::isPossible()
@@ -98,11 +102,14 @@ bool DrinkAction::isPossible()
         return false;
     }
 
-    return botAI->HasCheat(BotCheatMask::food) || UseItemAction::isPossible();
+    return UseItemAction::isPossible() || botAI->HasCheat(BotCheatMask::food);
 }
 
 bool EatAction::Execute(Event event)
 {
+    if (UseItemAction::isPossible() && UseItemAction::Execute(event))
+        return true;
+
     if (botAI->HasCheat(BotCheatMask::food))
     {
         // if (bot->IsNonMeleeSpellCast(true))
@@ -140,7 +147,7 @@ bool EatAction::Execute(Event event)
     return UseItemAction::Execute(event);
 }
 
-bool EatAction::isUseful() { return UseItemAction::isUseful() && AI_VALUE2(uint8, "health", "self target") < 100; }
+bool EatAction::isUseful() { return UseItemAction::isUseful() && AI_VALUE2(uint8, "health", "self target") < 75; }
 
 bool EatAction::isPossible()
 {
@@ -153,5 +160,5 @@ bool EatAction::isPossible()
         return false;
     }
 
-    return botAI->HasCheat(BotCheatMask::food) || UseItemAction::isPossible();
+    return UseItemAction::isPossible() || botAI->HasCheat(BotCheatMask::food);
 }

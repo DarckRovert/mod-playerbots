@@ -64,9 +64,9 @@ bool LootRollAction::Execute(Event /*event*/)
             {
                 case ITEM_CLASS_WEAPON:
                 case ITEM_CLASS_ARMOR:
-                    if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE || usage == ITEM_USAGE_BAD_EQUIP)
+                    if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE)
                         vote = NEED;
-                    else if (usage != ITEM_USAGE_NONE)
+                    else if (usage == ITEM_USAGE_BAD_EQUIP || usage != ITEM_USAGE_NONE)
                         vote = GREED;
                     break;
                 case ITEM_CLASS_RECIPE:
@@ -81,6 +81,30 @@ bool LootRollAction::Execute(Event /*event*/)
                     if (StoreLootAction::IsLootAllowed(itemId, botAI))
                         vote = CalculateRollVote(proto, usage);
                     break;
+            }
+        }
+        if (vote == NEED && proto->Quality >= ITEM_QUALITY_RARE)
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (!member || member == bot || !member->IsInWorld() || !IsRealPlayer(member))
+                    continue;
+                if (member->GetMapId() != bot->GetMapId())
+                    continue;
+
+                auto hVote = roll->playerVote.find(member->GetGUID());
+                if (hVote != roll->playerVote.end() && hVote->second == PASS)
+                    continue;
+
+                bool eligible = (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_JUNK)
+                                    ? CanBotUseToken(proto, member)
+                                    : (member->CanUseItem(proto) == EQUIP_ERR_OK);
+                if (eligible)
+                {
+                    vote = GREED; // Yield Rare+ upgrades to real human party members
+                    break;
+                }
             }
         }
         if (vote == NEED)
@@ -123,10 +147,10 @@ RollVote LootRollAction::CalculateRollVote(ItemTemplate const* proto, ItemUsage 
     {
         case ITEM_USAGE_EQUIP:
         case ITEM_USAGE_REPLACE:
-        case ITEM_USAGE_GUILD_TASK:
-        case ITEM_USAGE_BAD_EQUIP:
             needVote = NEED;
             break;
+        case ITEM_USAGE_GUILD_TASK:
+        case ITEM_USAGE_BAD_EQUIP:
         case ITEM_USAGE_SKILL:
         case ITEM_USAGE_USE:
         case ITEM_USAGE_AH:

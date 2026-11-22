@@ -187,6 +187,39 @@ bool AutoReleaseSpiritAction::ShouldAutoRelease() const
         bot->GetMap() &&
         (bot->GetMap()->IsRaid() || bot->GetMap()->IsDungeon()))
     {
+        // Wipe recovery: if the human leader already released, or nobody alive can resurrect and combat ended, release spirit too
+        if (groupLeader->HasPlayerFlag(PLAYER_FLAGS_GHOST))
+            return true;
+
+        Group* grp = bot->GetGroup();
+        if (!grp)
+            return true;
+
+        bool anyAliveRezer = false;
+        bool anyAliveInCombat = false;
+        uint32 const mapId = bot->GetMapId();
+
+        for (GroupReference* ref = grp->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == bot || !member->IsInWorld() || member->GetMapId() != mapId || !member->IsAlive())
+                continue;
+
+            if (member->IsInCombat())
+                anyAliveInCombat = true;
+
+            uint8 const cls = member->getClass();
+            if (cls == CLASS_PRIEST || cls == CLASS_PALADIN || cls == CLASS_SHAMAN ||
+                (cls == CLASS_DRUID && member->GetLevel() >= 20))
+            {
+                anyAliveRezer = true;
+                break;
+            }
+        }
+
+        if (!anyAliveRezer && !anyAliveInCombat)
+            return true;
+
         return false;
     }
 

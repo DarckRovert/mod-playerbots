@@ -74,8 +74,10 @@ ActionExecutionListeners::~ActionExecutionListeners()
 Engine::~Engine(void)
 {
     Reset();
-    delete rustCombatAction;
-    rustCombatAction = nullptr;
+    delete rustTacticalAction;
+    rustTacticalAction = nullptr;
+    delete rustRotationAction;
+    rustRotationAction = nullptr;
 
     // for (std::map<std::string, Strategy*>::iterator i = strategies.begin(); i != strategies.end(); i++)
     // {
@@ -369,62 +371,32 @@ ActionResult Engine::ExecuteAction(std::string const name, Event event, std::str
     return result ? ACTION_RESULT_OK : ACTION_RESULT_FAILED;
 }
 
-void Engine::addStrategy(std::string const name, bool init)
+bool Engine::addStrategyInternal(std::string const& name)
 {
-    removeStrategy(name, init);
+    Strategy* strategy = aiObjectContext->GetStrategy(name);
+    if (!strategy)
+        return false;
 
-    if (Strategy* strategy = aiObjectContext->GetStrategy(name))
+    std::string const& stratName = strategy->getName();
+    bool alreadyActive = (strategies.find(stratName) != strategies.end());
+    std::set<std::string> siblings = aiObjectContext->GetSiblingStrategy(name);
+
+    bool evictedSibling = false;
+    for (std::string const& sib : siblings)
     {
-        std::set<std::string> siblings = aiObjectContext->GetSiblingStrategy(name);
-        for (std::set<std::string>::iterator i = siblings.begin(); i != siblings.end(); i++)
-            removeStrategy(*i, init);
-
-        LogAction("S:+%s", strategy->getName().c_str());
-        strategies[strategy->getName()] = strategy;
+        if (sib != stratName && removeStrategyInternal(sib))
+            evictedSibling = true;
     }
-    if (init)
-        Init();
+
+    if (alreadyActive && !evictedSibling)
+        return false;
+
+    LogAction("S:+%s", stratName.c_str());
+    strategies[stratName] = strategy;
+    return true;
 }
 
-void Engine::addStrategies(std::string first, ...)
-{
-    addStrategy(first, false);
-
-    va_list vl;
-    va_start(vl, first);
-
-    char const* cur;
-    do
-    {
-        cur = va_arg(vl, char const*);
-        if (cur)
-            addStrategy(cur, false);
-    } while (cur);
-
-    Init();
-
-    va_end(vl);
-}
-
-void Engine::addStrategiesNoInit(std::string first, ...)
-{
-    addStrategy(first, false);
-
-    va_list vl;
-    va_start(vl, first);
-
-    char const* cur;
-    do
-    {
-        cur = va_arg(vl, char const*);
-        if (cur)
-            addStrategy(cur, false);
-    } while (cur);
-
-    va_end(vl);
-}
-
-bool Engine::removeStrategy(std::string const name, bool init)
+bool Engine::removeStrategyInternal(std::string const& name)
 {
     std::map<std::string, Strategy*>::iterator i = strategies.find(name);
     if (i == strategies.end())
@@ -432,6 +404,60 @@ bool Engine::removeStrategy(std::string const name, bool init)
 
     LogAction("S:-%s", name.c_str());
     strategies.erase(i);
+    return true;
+}
+
+void Engine::addStrategy(std::string const name, bool init)
+{
+    bool changed = addStrategyInternal(name);
+    if (init && changed)
+        Init();
+}
+
+void Engine::addStrategies(std::string first, ...)
+{
+    bool changed = addStrategyInternal(first);
+
+    va_list vl;
+    va_start(vl, first);
+
+    char const* cur;
+    do
+    {
+        cur = va_arg(vl, char const*);
+        if (cur)
+            changed |= addStrategyInternal(cur);
+    } while (cur);
+
+    if (changed)
+        Init();
+
+    va_end(vl);
+}
+
+void Engine::addStrategiesNoInit(std::string first, ...)
+{
+    addStrategyInternal(first);
+
+    va_list vl;
+    va_start(vl, first);
+
+    char const* cur;
+    do
+    {
+        cur = va_arg(vl, char const*);
+        if (cur)
+            addStrategyInternal(cur);
+    } while (cur);
+
+    va_end(vl);
+}
+
+bool Engine::removeStrategy(std::string const name, bool init)
+{
+    if (!removeStrategyInternal(name))
+        return false;
+
     if (init)
         Init();
 
@@ -526,7 +552,8 @@ void Engine::PushDefaultActions()
     if (botAI && botAI->GetState() == BOT_STATE_COMBAT && sPlayerbotAIConfig.rustCombatMode >= 2)
     {
         Event emptyEvent;
-        MultiplyAndPush({ NextAction("rust combat core", ACTION_MOVE - 0.5f) }, 0.0f, false, emptyEvent, "default");
+        MultiplyAndPush({ NextAction("rust combat tactical", ACTION_MOVE - 0.5f) }, 0.0f, false, emptyEvent, "default");
+        MultiplyAndPush({ NextAction("rust combat rotation", ACTION_HIGH - 0.5f) }, 0.0f, false, emptyEvent, "default");
     }
 
     for (std::map<std::string, Strategy*>::iterator i = strategies.begin(); i != strategies.end(); i++)
@@ -588,11 +615,17 @@ Action* Engine::InitializeAction(ActionNode* actionNode)
     Action* action = actionNode->getAction();
     if (!action)
     {
-        if (actionNode->getName() == "rust combat core")
+        if (actionNode->getName() == "rust combat tactical")
         {
-            if (!rustCombatAction)
-                rustCombatAction = new JainaRustCombat::RustCombatAction(botAI);
-            action = rustCombatAction;
+            if (!rustTacticalAction)
+                rustTacticalAction = new JainaRustCombat::RustTacticalAction(botAI);
+            action = rustTacticalAction;
+        }
+        else if (actionNode->getName() == "rust combat rotation")
+        {
+            if (!rustRotationAction)
+                rustRotationAction = new JainaRustCombat::RustRotationAction(botAI);
+            action = rustRotationAction;
         }
         else
         {
@@ -681,26 +714,36 @@ void Engine::LogAction(char const* format, ...)
 
 void Engine::ChangeStrategy(std::string const names)
 {
+    bool changed = false;
     std::vector<std::string> splitted = split(names, ',');
     for (std::vector<std::string>::iterator i = splitted.begin(); i != splitted.end(); i++)
     {
+        if (i->empty())
+            continue;
+
         char const* name = i->c_str();
         switch (name[0])
         {
             case '+':
-                addStrategy(name + 1);
+                changed |= addStrategyInternal(name + 1);
                 break;
             case '-':
-                removeStrategy(name + 1);
+                changed |= removeStrategyInternal(name + 1);
                 break;
             case '~':
-                toggleStrategy(name + 1);
+                if (!removeStrategyInternal(name + 1))
+                    changed |= addStrategyInternal(name + 1);
+                else
+                    changed = true;
                 break;
             case '?':
                 botAI->TellMaster(ListStrategies());
                 break;
         }
     }
+
+    if (changed)
+        Init();
 }
 
 void Engine::LogValues()

@@ -666,6 +666,10 @@ protected:
     uint32 nextTransportCheck = 0;
     bool spellInterruptRequested = false;
     uint32 tacticalMovementLockEnd = 0;
+    WorldPosition stuckWatchPos;
+    uint32 stuckElapsedMs = 0;
+    bool stuckSidestepTried = false;
+    void UpdateStuckWatchdog(uint32 elapsed);
 };
 
 #endif
