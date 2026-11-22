@@ -49,6 +49,7 @@
 #include <iomanip>
 #include <random>
 #include <set>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -728,7 +729,7 @@ uint32 RandomPlayerbotMgr::AddRandomBots()
             accountsToUse = rndBotTypeAccounts;
         }
 
-        // Pre-map all characters from selected accounts
+        // Pre-map all characters from selected accounts (cached in RAM to eliminate 650 synchronous SQL queries per tick)
         struct CharacterInfo
         {
             uint32 guid;
@@ -736,10 +737,18 @@ uint32 RandomPlayerbotMgr::AddRandomBots()
             uint8 rRace;
             uint32 accountId;
         };
+        static std::unordered_map<uint32, std::vector<CharacterInfo>> s_accountCharactersCache;
         std::vector<CharacterInfo> allCharacters;
 
         for (uint32 accountId : accountsToUse)
         {
+            auto cacheIt = s_accountCharactersCache.find(accountId);
+            if (cacheIt != s_accountCharactersCache.end())
+            {
+                allCharacters.insert(allCharacters.end(), cacheIt->second.begin(), cacheIt->second.end());
+                continue;
+            }
+
             CharacterDatabasePreparedStatement* stmt =
                 CharacterDatabase.GetPreparedStatement(CHAR_SEL_ACCOUNT_INFO_CHARS);
             stmt->SetData(0, accountId);
@@ -747,6 +756,7 @@ uint32 RandomPlayerbotMgr::AddRandomBots()
             if (!result)
                 continue;
 
+            std::vector<CharacterInfo> accountChars;
             do
             {
                 Field* fields = result->Fetch();
@@ -755,8 +765,12 @@ uint32 RandomPlayerbotMgr::AddRandomBots()
                 info.rRace = fields[3].Get<uint8>();
                 info.rClass = fields[4].Get<uint8>();
                 info.accountId = accountId;
+                accountChars.push_back(info);
                 allCharacters.push_back(info);
             } while (result->NextRow());
+
+            if (!accountChars.empty())
+                s_accountCharactersCache.emplace(accountId, std::move(accountChars));
         }
 
         // Shuffle for class balance
